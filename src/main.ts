@@ -1,4 +1,4 @@
-import { ProcessingNode, Texture } from './lib';
+import { ProcessingNode, RasterContext, Texture } from './lib';
 import './style.css'
 
 
@@ -6,22 +6,15 @@ const appDiv = document.getElementById('app') as HTMLDivElement;
 
 
 function demo1() {
-  const n = new ProcessingNode({container: appDiv, width: 200, height: 200});
+  const rctx = new RasterContext({
+    width: 1000,
+    height: 800,
+  });
 
-  
-  const vertexShader = `
-  #version 300 es
+  appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
-  in vec2 a_position;
-  out vec4 position;
-  out vec2 uv;
-
-  void main() {
-    position = vec4(a_position, 0.0, 1.0);
-    gl_Position = position;
-    uv = position.xy / 2. + 0.5;
-  }
-  `.trim();
+  // The size overwrite will result in a canvas being 200x400
+  const n = new ProcessingNode(rctx, {width: 200, height: 400});
 
   const fragmentShader = `
   #version 300 es
@@ -41,19 +34,15 @@ function demo1() {
   `.trim();
 
   n.setShaderSource({
-    // vertexShaderSource: vertexShader,
     fragmentShaderSource: fragmentShader,
   });
 
   n.setUniformNumber("u_red", 150);
   n.setUniformNumber("u_green", 90);
-  // n.setUniformNumber("u_blue", 180);
-
 
   let blue = 0;
   const increaseBlue = () => {
     blue = (++blue) % 255;
-    console.log(blue);
     
     n.setUniformNumber("u_blue", blue);
     n.render();
@@ -65,7 +54,13 @@ function demo1() {
 
 
 async function demo2() {
-  const n = new ProcessingNode({container: appDiv, width: 512, height: 512});
+  const rctx = new RasterContext({
+    width: 512,
+    height: 512,
+  });
+  const n = new ProcessingNode(rctx);
+
+  appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern
@@ -73,7 +68,7 @@ async function demo2() {
     .replace("{x}", "532")
     .replace("{y}", "363")
 
-  const tex = await Texture.fromURL(tileUrl);
+  const tex = await Texture.fromURL(rctx, tileUrl);
 
   const fragmentShader = `
   #version 300 es
@@ -115,7 +110,13 @@ async function demo2() {
 
 
 async function demo3() {
-  const n = new ProcessingNode({width: 512, height: 512});
+  const rctx = new RasterContext({
+    width: 512,
+    height: 512,
+    offscreen: true,
+  });
+
+  const n = new ProcessingNode(rctx, {renderToTexture: true});
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern
@@ -123,7 +124,7 @@ async function demo3() {
     .replace("{x}", "532")
     .replace("{y}", "363")
 
-  const tex = await Texture.fromURL(tileUrl);
+  const tex = await Texture.fromURL(rctx, tileUrl);
 
   const fragmentShader = `
   #version 300 es

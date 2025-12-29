@@ -1,17 +1,14 @@
 // Note: if target canvas is resized: https://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
 
-import type { vec4 } from "gl-matrix";
 import {
   compileShader,
   createProgram,
-  DEFAULT_HEIGHT,
-  DEFAULT_WIDTH,
-  getDefaultGlContext,
 } from "./gltools";
 import { isArrayOfTexture, isTexture, U_TYPE } from "./typetester";
 import defaultVertexShader from "./shaders/default.vs.glsl?raw";
 import defaultFragmentShader from "./shaders/default.fs.glsl?raw";
 import { Texture } from "./Texture";
+import type { RasterContext } from "./RasterContext";
 
 // Many uniform functions exist and they have different signature depending on type
 // but this kind of covers all the usages
@@ -68,12 +65,16 @@ type UniformData = {
   fragmentTexture?: Texture;
 };
 
+/**
+ * Color channels: R, G, B and A with values in [0, 1]
+ */
+export type RGBAUnitColor = [number, number, number, number];
+
 export class ProcessingNode {
-  private readonly container: HTMLDivElement | null = null;
-  private readonly gl: WebGL2RenderingContext;
-  private outputWidth = DEFAULT_WIDTH;
-  private outputHeight = DEFAULT_HEIGHT;
-  private renderToTexture = true;
+  private readonly rasterContext: RasterContext;
+  private renderToTexture: boolean;
+  private outputWidth: number;
+  private outputHeight: number;
   private outputNeedUpdate = true;
   private positionAttributeLocation: number | null = null;
   private compiledVertexShader: WebGLShader | null = null;
@@ -83,61 +84,53 @@ export class ProcessingNode {
   private shaderProgram: WebGLProgram | null = null;
   private shaderProgramError: string | null = null;
   private uniforms: { [key: string]: UniformData } = {};
-  private clearColor: vec4 = [0, 0, 0, 1];
+  private clearColor: RGBAUnitColor = [0, 0, 0, 1];
   private outputTexture: WebGLTexture | null = null;
   private framebuffer: WebGLFramebuffer | null = null;
   // private isOffscreen: boolean;
   private readonly uint32: boolean = false;
 
   constructor(
+    rasterContext: RasterContext,
     options: {
-      container?: HTMLDivElement;
+      renderToTexture?: boolean,
       width?: number;
       height?: number;
       uint32?: boolean;
     } = {}
   ) {
-
+    this.rasterContext = rasterContext;
+    const ctxSize = this.rasterContext.getSize();
+    this.renderToTexture = options.renderToTexture ?? false;
+    this.outputWidth = options.width ?? ctxSize.width;
+    this.outputHeight = options.height ?? ctxSize.height;
     this.uint32 = options.uint32 ?? false;
+    const gl = this.rasterContext.getGlContext();
 
-    this.gl = getDefaultGlContext();
+    // Regardless of the render target, the canvas size must be adapted
+    if (this.renderToTexture) {
+      gl.canvas.width = this.outputWidth;
+      gl.canvas.height = this.outputHeight;
+    } else {
 
-    if (options.container) {
-      this.container = options.container;
-      this.outputWidth = this.container.clientWidth || DEFAULT_WIDTH;
-      this.outputHeight = this.container.clientHeight || DEFAULT_HEIGHT;
-      this.renderToTexture = false;
-    }
-
-    if (options.width) {
-      this.outputWidth = options.width;
-    }
-
-    if (options.height) {
-      this.outputHeight = options.height;
-    }
-
-    if (this.container) {
       if (this.uint32) {
         throw new Error(
           "A Node can only output uint32 when rendering to texture."
         );
       }
 
-      this.gl.canvas.width = this.outputWidth * devicePixelRatio;
-      this.gl.canvas.height = this.outputHeight * devicePixelRatio;
+      // Particularity for hi-DPI screens
+      gl.canvas.width = this.outputWidth * devicePixelRatio;
+      gl.canvas.height = this.outputHeight * devicePixelRatio;
       
-      this.container.appendChild(this.gl.canvas as HTMLCanvasElement);
-      (this.gl.canvas as HTMLCanvasElement).style.width = `${this.outputWidth}px`;
-      (this.gl.canvas as HTMLCanvasElement).style.height = `${this.outputHeight}px`;
-
-    } else {
-      this.gl.canvas.width = this.outputWidth;
-      this.gl.canvas.height = this.outputHeight;
+      if ( !(gl.canvas instanceof OffscreenCanvas)) {
+        gl.canvas.style.width = `${this.outputWidth}px`;
+        gl.canvas.style.height = `${this.outputHeight}px`;
+      }
     }
   }
 
-  setClearColor(color: vec4) {
+  setClearColor(color: RGBAUnitColor) {
     this.clearColor[0] = color[0];
     this.clearColor[1] = color[1];
     this.clearColor[2] = color[2];
@@ -155,14 +148,6 @@ export class ProcessingNode {
     this.outputNeedUpdate = true;
   }
 
-  getGl(): WebGL2RenderingContext {
-    return this.gl;
-  }
-
-  getCanvas(): HTMLCanvasElement | OffscreenCanvas {
-    return this.gl.canvas;
-  }
-
   getVertexShaderError(): string | null {
     return this.vertexShaderError;
   }
@@ -176,15 +161,16 @@ export class ProcessingNode {
   }
 
   private resetProgram() {
-    this.gl.deleteProgram(this.shaderProgram);
+    const gl = this.rasterContext.getGlContext();
+    gl.deleteProgram(this.shaderProgram);
     this.shaderProgram = null;
     this.shaderProgramError = null;
 
-    this.gl.deleteShader(this.compiledVertexShader);
+    gl.deleteShader(this.compiledVertexShader);
     this.compiledVertexShader = null;
     this.vertexShaderError = null;
 
-    this.gl.deleteShader(this.compiledFragmentShader);
+    gl.deleteShader(this.compiledFragmentShader);
     this.compiledFragmentShader = null;
     this.fragmentShaderError = null;
   }
@@ -204,7 +190,7 @@ export class ProcessingNode {
     const fragmentShaderSource =
       options.fragmentShaderSource ?? defaultFragmentShader;
 
-    const gl = this.gl;
+      const gl = this.rasterContext.getGlContext();
     const vertexShaderData = compileShader(
       gl,
       gl.VERTEX_SHADER,
@@ -244,7 +230,7 @@ export class ProcessingNode {
       throw new Error(programData.error);
     }
 
-    this.gl.useProgram(this.shaderProgram);
+    gl.useProgram(this.shaderProgram);
   }
 
   isProgramValid(): boolean {
@@ -256,6 +242,7 @@ export class ProcessingNode {
    * The type is float by default but can be enforce to a integer
    */
   setUniformBoolean(name: string, value: boolean | boolean[]) {
+    const gl = this.rasterContext.getGlContext();
     let u: UniformData;
 
     if (name in this.uniforms) {
@@ -274,7 +261,7 @@ export class ProcessingNode {
 
     // If unique boolean, do like a int
     if (typeof value === "boolean") {
-      u.uniformFunction = this.gl.uniform1i;
+      u.uniformFunction = gl.uniform1i;
       u.uniformFunctionArguments = [+value];
       this.uniforms[name] = u;
     }
@@ -285,7 +272,7 @@ export class ProcessingNode {
       value.length > 0 &&
       typeof value[0] === "boolean"
     ) {
-      u.uniformFunction = this.gl.uniform1iv;
+      u.uniformFunction = gl.uniform1iv;
       u.uniformFunctionArguments = [value.map((el: boolean) => +el)];
       this.uniforms[name] = u;
     } else {
@@ -302,6 +289,7 @@ export class ProcessingNode {
     value: number | number[],
     type: U_TYPE = U_TYPE.FLOAT
   ) {
+    const gl = this.rasterContext.getGlContext();
     let u: UniformData;
 
     if (name in this.uniforms) {
@@ -320,14 +308,14 @@ export class ProcessingNode {
 
     // If unique float
     if (typeof value === "number" && type === U_TYPE.FLOAT) {
-      u.uniformFunction = this.gl.uniform1f;
+      u.uniformFunction = gl.uniform1f;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     }
 
     // If unique int
     else if (typeof value === "number" && type === U_TYPE.INT) {
-      u.uniformFunction = this.gl.uniform1i;
+      u.uniformFunction = gl.uniform1i;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     }
@@ -339,7 +327,7 @@ export class ProcessingNode {
       typeof value[0] === "number" &&
       type === U_TYPE.FLOAT
     ) {
-      u.uniformFunction = this.gl.uniform1fv;
+      u.uniformFunction = gl.uniform1fv;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     }
@@ -351,7 +339,7 @@ export class ProcessingNode {
       typeof value[0] === "number" &&
       type === U_TYPE.INT
     ) {
-      u.uniformFunction = this.gl.uniform1iv;
+      u.uniformFunction = gl.uniform1iv;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     } else {
@@ -367,6 +355,7 @@ export class ProcessingNode {
     value: Texture /* | Texture[]*/
   ) {
     let u: UniformData;
+    const gl = this.rasterContext.getGlContext();
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
@@ -385,7 +374,7 @@ export class ProcessingNode {
 
     // A texture
     if (isTexture(value)) {
-      u.uniformFunction = this.gl.uniform1i;
+      u.uniformFunction = gl.uniform1i;
       u.fragmentTexture = value;
       u.fragmentTexture?.addUsageRecord(this, name);
       u.uniformFunctionArguments = [u.fragmentTexture.textureUnit];
@@ -416,7 +405,7 @@ export class ProcessingNode {
   // }
 
   private initUniforms() {
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
     const program = this.shaderProgram;
 
     if (!program) {
@@ -439,7 +428,7 @@ export class ProcessingNode {
       u.location ??= gl.getUniformLocation(program, u.name);
 
       // Set the value
-      u.uniformFunction.apply(this.gl, [
+      u.uniformFunction.apply(gl, [
         u.location,
         ...u.uniformFunctionArguments,
       ]);
@@ -463,14 +452,14 @@ export class ProcessingNode {
       gl.bindTexture(gl.TEXTURE_2D, u.fragmentTexture.texture);
 
       // Set the value
-      u.uniformFunction.apply(this.gl, [u.location, textureUnit]);
+      u.uniformFunction.apply(gl, [u.location, textureUnit]);
     });
   }
 
   private initPlane() {
+    const gl = this.rasterContext.getGlContext();
     if (this.positionAttributeLocation) return;
 
-    const gl = this.gl;
     const program = this.shaderProgram;
 
     if (!program) return;
@@ -519,10 +508,8 @@ export class ProcessingNode {
   private initRenderToTextureLogic() {
     // init only if the node renders to texture and the framebuffer and texture are not initialized
     if (!this.renderToTexture || this.outputTexture || this.framebuffer) return;
-
-    console.log("render to texture");
     
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
 
     this.outputTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.outputTexture);
@@ -585,7 +572,7 @@ export class ProcessingNode {
   private updateOutput() {
     if (!this.outputNeedUpdate) return;
 
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
 
     if (this.renderToTexture && this.outputTexture && this.framebuffer) {
       gl.bindTexture(gl.TEXTURE_2D, this.outputTexture);
@@ -596,8 +583,10 @@ export class ProcessingNode {
       gl.canvas.width = this.outputWidth * devicePixelRatio;
       gl.canvas.height = this.outputHeight * devicePixelRatio;
 
-      (this.gl.canvas as HTMLElement).style.width = `${this.outputWidth}px`;
-      (this.gl.canvas as HTMLElement).style.height = `${this.outputHeight}px`;
+      if (!(gl.canvas instanceof OffscreenCanvas)) {
+        gl.canvas.style.width = `${this.outputWidth}px`;
+        gl.canvas.style.height = `${this.outputHeight}px`;
+      }
 
       // Set the viewport size to match the canvas size
       // gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -610,7 +599,7 @@ export class ProcessingNode {
   testVertexBuffer() {
     if (!this.shaderProgram) return;
 
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
 
     // const bufferAttributeLocation = gl.getAttribLocation(this.shaderProgram, 'a_color');
 
@@ -670,7 +659,7 @@ export class ProcessingNode {
   render() {
     if (!this.shaderProgram) return;
 
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
     this.initPlane();
     this.initRenderToTextureLogic();
     this.updateOutput();
@@ -711,7 +700,7 @@ export class ProcessingNode {
   getPixelData(
     asFloat = false
   ): Uint8Array | Uint32Array | Float32Array {
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
     const w = gl.canvas.width;
     const h = gl.canvas.height;
 
@@ -738,7 +727,7 @@ export class ProcessingNode {
       return null;
     }
 
-    const gl = this.gl;
+    const gl = this.rasterContext.getGlContext();
     const w = gl.canvas.width;
     const h = gl.canvas.height;
     const canvas = new OffscreenCanvas(w, h);

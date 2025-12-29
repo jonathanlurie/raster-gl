@@ -1,4 +1,5 @@
 import type { ProcessingNode } from "./ProcessingNode";
+import type { RasterContext } from "./RasterContext";
 import {
   getUnusedTextureUnit,
   getDefaultGlContext,
@@ -58,8 +59,8 @@ export class Texture {
   /**
    * Instanciate a Texture from an ImageBitmap
    */
-  static fromImageBitmap(image: ImageBitmap, options: TextureOptions = {}): Texture {
-    const gl = getDefaultGlContext();
+  static fromImageBitmap(rasterContext: RasterContext, image: ImageBitmap, options: TextureOptions = {}): Texture {
+    const gl = rasterContext.getGlContext();
 
     const optionsWithDefault = {
       ...defaultOptionValues,
@@ -114,6 +115,7 @@ export class Texture {
    * Create a Texture instance from the URL of an image (png or jpeg)
    */
   static async fromURL(
+    rasterContext: RasterContext,
     url: string,
     options: TextureOptions = {}
   ): Promise<Texture> {
@@ -124,17 +126,18 @@ export class Texture {
 
     const blob = await response.blob();
     const imageBitmap = await createImageBitmap(blob);
-    return Texture.fromImageBitmap(imageBitmap, options);
+    return Texture.fromImageBitmap(rasterContext, imageBitmap, options);
   }
-  
+
 
   static fromData(
+    rasterContext: RasterContext,
     data: Uint8Array,
     width: number,
     height: number,
     options: TextureOptions = {}
   ): Texture {
-    const gl = getDefaultGlContext();
+    const gl = rasterContext.getGlContext();
     const texture = gl.createTexture();
 
     const optionsWithDefault = {
