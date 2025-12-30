@@ -190,7 +190,7 @@ export class ProcessingNode {
     const fragmentShaderSource =
       options.fragmentShaderSource ?? defaultFragmentShader;
 
-      const gl = this.rasterContext.getGlContext();
+    const gl = this.rasterContext.getGlContext();
     const vertexShaderData = compileShader(
       gl,
       gl.VERTEX_SHADER,
@@ -242,6 +242,7 @@ export class ProcessingNode {
    * The type is float by default but can be enforce to a integer
    */
   setUniformBoolean(name: string, value: boolean | boolean[]) {
+    this.outputNeedUpdate = true;
     const gl = this.rasterContext.getGlContext();
     let u: UniformData;
 
@@ -289,6 +290,7 @@ export class ProcessingNode {
     value: number | number[],
     type: U_TYPE = U_TYPE.FLOAT
   ) {
+    this.outputNeedUpdate = true;
     const gl = this.rasterContext.getGlContext();
     let u: UniformData;
 
@@ -352,8 +354,9 @@ export class ProcessingNode {
    */
   setUniformTexture2D(
     name: string,
-    value: Texture /* | Texture[]*/
+    value: Texture | ProcessingNode /* | Texture[]*/
   ) {
+    this.outputNeedUpdate = true;
     let u: UniformData;
     const gl = this.rasterContext.getGlContext();
 
@@ -372,8 +375,18 @@ export class ProcessingNode {
       };
     }
 
+    // A ProcessingNode instance, from which we get the output texture
+    if (value instanceof ProcessingNode) {
+      const texture = value.getOutputTexture();
+      u.uniformFunction = gl.uniform1i;
+      u.fragmentTexture = texture;
+      u.fragmentTexture?.addUsageRecord(this, name);
+      u.uniformFunctionArguments = [u.fragmentTexture.textureUnit];
+      this.uniforms[name] = u;
+    }
+
     // A texture
-    if (isTexture(value)) {
+    else if (isTexture(value)) {
       u.uniformFunction = gl.uniform1i;
       u.fragmentTexture = value;
       u.fragmentTexture?.addUsageRecord(this, name);
@@ -412,6 +425,9 @@ export class ProcessingNode {
       return;
     }
 
+    console.log("hello", program);
+    
+
     const uniformArray = Object.keys(this.uniforms).map(
       (k: string) => this.uniforms[k]
     );
@@ -422,7 +438,7 @@ export class ProcessingNode {
     nonTextureUniforms.forEach((u) => {
       if (!u.needsUpdate) return;
       if (!u.uniformFunction) return;
-      if (!u.uniformFunctionArguments) return;
+      if (!u.uniformFunctionArguments) return;      
 
       // If it's the first use of this uniform, we have to find a location for it
       u.location ??= gl.getUniformLocation(program, u.name);
@@ -432,6 +448,8 @@ export class ProcessingNode {
         u.location,
         ...u.uniformFunctionArguments,
       ]);
+
+      u.needsUpdate = false;
     });
 
     // The case of texture uniforms is handled separately.
@@ -442,17 +460,19 @@ export class ProcessingNode {
       if (!u.uniformFunction) return;
       if (!u.uniformFunctionArguments) return;
       if (!u.fragmentTexture) return;
-
+      
       // If it's the first use of this uniform, we have to find a location for it
       u.location ??= gl.getUniformLocation(program, u.name);
 
-      const textureUnit = u.fragmentTexture.textureUnit;
+      const textureUnit = u.fragmentTexture.textureUnit;      
 
       gl.activeTexture(gl.TEXTURE0 + textureUnit);
       gl.bindTexture(gl.TEXTURE_2D, u.fragmentTexture.texture);
 
       // Set the value
       u.uniformFunction.apply(gl, [u.location, textureUnit]);
+
+      u.needsUpdate = false;
     });
   }
 
@@ -494,8 +514,16 @@ export class ProcessingNode {
    * Will be `null` if this node was set to render to a canvas.
    * Will be a valid `FragmentTexture` if this node was set to render to texture.
    */
-  getOutput(): Texture | null {
-    if (!this.outputTexture) return null;
+  getOutputTexture(): Texture {
+    // Force a rendering if necessary
+    if (this.outputNeedUpdate) {
+      this.render();
+    }
+
+    if (!this.outputTexture) {
+      console.warn("[GPU readback necessary] This node is not rendering to a texture.");
+      return Texture.fromImageSource(this.rasterContext, this.getNewOffscreenCanvas());
+    };
 
     return new Texture(
       this.outputTexture,
@@ -660,6 +688,15 @@ export class ProcessingNode {
     if (!this.shaderProgram) return;
 
     const gl = this.rasterContext.getGlContext();
+    
+    // make sure the program of this node is attached to the gl context
+    // (if .setShaderSource() is called on a different node before this
+    // node has rendered, this would otherwise cause mix match)
+    const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
+    if (currentProgram !== this.shaderProgram) {
+      gl.useProgram(this.shaderProgram);
+    }
+
     this.initPlane();
     this.initRenderToTextureLogic();
     this.updateOutput();
@@ -721,28 +758,36 @@ export class ProcessingNode {
     return pixelData;
   }
 
-  async getPNGImageBlob(): Promise<Blob | null> {
+  getImageData(): ImageData {
     if (this.uint32) {
-      console.warn("Cannot convert uint32 data into PNG.");
-      return null;
+      throw new Error("Uint32 image cannot be used to create an RGBA8 image.")
     }
 
     const gl = this.rasterContext.getGlContext();
     const w = gl.canvas.width;
     const h = gl.canvas.height;
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) {
-      console.warn("The ceonxt of the offscreen canvas is null.");
-      return null;
-    }
-
     const imageData = new ImageData(w, h);
     const pixelData = this.getPixelData();
     imageData.data.set(pixelData);
-    ctx.putImageData(imageData, 0, 0);
+    return imageData;
+  }
 
+
+  async getImageBitmap(): Promise<ImageBitmap> {
+    const imageData = this.getImageData();
+    return createImageBitmap(imageData);
+  }
+
+  getNewOffscreenCanvas(): OffscreenCanvas {
+    const imageData = this.getImageData();
+    const canvas = new OffscreenCanvas(imageData.width, imageData.height);
+    const ctx = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
+  }
+
+  async getPNGImageBlob(): Promise<Blob | null> {
+    const canvas = this.getNewOffscreenCanvas();
     const blob = await canvas.convertToBlob();
     return blob;
   }
@@ -778,5 +823,9 @@ export class ProcessingNode {
     }
 
     return URL.createObjectURL(blob);
+  }
+
+  doesOutputNeedUpdate(): boolean {
+    return this.outputNeedUpdate
   }
 }

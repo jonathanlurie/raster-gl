@@ -59,7 +59,7 @@ export class Texture {
   /**
    * Instanciate a Texture from an ImageBitmap
    */
-  static fromImageBitmap(rasterContext: RasterContext, image: ImageBitmap, options: TextureOptions = {}): Texture {
+  static fromImageSource(rasterContext: RasterContext, image: TexImageSource, options: TextureOptions = {}): Texture {
     const gl = rasterContext.getGlContext();
 
     const optionsWithDefault = {
@@ -103,13 +103,30 @@ export class Texture {
       throw new Error("Could not load image");
     }
 
+    let width = 0;
+    let height = 0;
+
+    if (image instanceof VideoFrame) {
+      width = image.codedWidth;
+      height = image.codedHeight;
+    } else {
+      width = image.width;
+      height = image.height;
+    }
+
+    if (width === 0 || height === 0) {
+      throw new Error(`Image dimensions are invalid (${width}, ${height})`);
+    }
+
     return new Texture(
       texture,
-      image.width,
-      image.height,
+      width,
+      height,
       8
     );
   }
+
+
 
   /**
    * Create a Texture instance from the URL of an image (png or jpeg)
@@ -126,7 +143,7 @@ export class Texture {
 
     const blob = await response.blob();
     const imageBitmap = await createImageBitmap(blob);
-    return Texture.fromImageBitmap(rasterContext, imageBitmap, options);
+    return Texture.fromImageSource(rasterContext, imageBitmap, options);
   }
 
 

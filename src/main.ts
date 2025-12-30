@@ -113,10 +113,12 @@ async function demo3() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
-    offscreen: true,
+    offscreen: false,
   });
 
-  const n = new ProcessingNode(rctx, {renderToTexture: true});
+  appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
+
+  const n1 = new ProcessingNode(rctx, {renderToTexture: true});
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern
@@ -126,7 +128,7 @@ async function demo3() {
 
   const tex = await Texture.fromURL(rctx, tileUrl);
 
-  const fragmentShader = `
+  const fragmentShader1 = `
   #version 300 es
 
   precision highp float;
@@ -149,18 +151,54 @@ async function demo3() {
   }
   `.trim();
 
-  n.setShaderSource({
-    fragmentShaderSource: fragmentShader,
+  
+
+  n1.setShaderSource({
+    fragmentShaderSource: fragmentShader1,
   });
 
-  n.setUniformTexture2D("u_tile", tex)
+  
+  n1.setUniformTexture2D("u_tile", tex)
 
-  console.log(n.getVertexShaderError());
-  console.log(n.getFragmentShaderError());
+  console.log(n1.getVertexShaderError());
+  console.log(n1.getFragmentShaderError());
 
-  n.render();
+  // Can be ommited because getting the output texture out of it
+  // will force a render
+  // n1.render();
 
-  console.log(n.getPixelData());
+  // console.log(n1.getPixelData());
+
+  const n2 = new ProcessingNode(rctx, {renderToTexture: false});
+
+  const fragmentShader2 = `
+  #version 300 es
+
+  precision highp float;
+
+  in vec2 uv;
+  out vec4 fragColor;
+
+  uniform sampler2D u_tileElevation;
+
+  void main() {
+    vec4 color = texture(u_tileElevation, uv);
+    fragColor = vec4(1., color.r, 0., 1.);
+  }
+  `.trim();
+
+  n2.setShaderSource({
+    fragmentShaderSource: fragmentShader2,
+  });
+
+  n2.setUniformTexture2D("u_tileElevation", n1);
+
+
+  console.time("render");
+  n2.render();
+  console.timeEnd("render");
+
+  console.log(n2.getPixelData());
 }
 
 
