@@ -425,9 +425,6 @@ export class ProcessingNode {
       return;
     }
 
-    console.log("hello", program);
-    
-
     const uniformArray = Object.keys(this.uniforms).map(
       (k: string) => this.uniforms[k]
     );
