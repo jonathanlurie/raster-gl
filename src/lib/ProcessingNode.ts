@@ -73,6 +73,7 @@ export type RGBAUnitColor = [number, number, number, number];
 export class ProcessingNode {
   private readonly rasterContext: RasterContext;
   private renderToTexture: boolean;
+  private readonly reuseOutputTexture: boolean;
   private outputWidth: number;
   private outputHeight: number;
   private outputNeedUpdate = true;
@@ -94,6 +95,13 @@ export class ProcessingNode {
     rasterContext: RasterContext,
     options: {
       renderToTexture?: boolean,
+
+      /**
+       * When true, the same output texture is reused for every render call (convenient for multipass animation)
+       * When false, a new texture is created for each render call (convenient to reuse the same node to create different outputs)
+       * Used only if renderToTexture is true.
+       */
+      reuseOutputTexture?: boolean,
       width?: number;
       height?: number;
       uint32?: boolean;
@@ -102,6 +110,7 @@ export class ProcessingNode {
     this.rasterContext = rasterContext;
     const ctxSize = this.rasterContext.getSize();
     this.renderToTexture = options.renderToTexture ?? false;
+    this.reuseOutputTexture = options.reuseOutputTexture ?? true;
     this.outputWidth = options.width ?? ctxSize.width;
     this.outputHeight = options.height ?? ctxSize.height;
     this.uint32 = options.uint32 ?? false;
@@ -531,11 +540,10 @@ export class ProcessingNode {
   }
 
   private initRenderToTextureLogic() {
-    // init only if the node renders to texture and the framebuffer and texture are not initialized
-    if (!this.renderToTexture || this.outputTexture || this.framebuffer) return;
-    
-    const gl = this.rasterContext.getGlContext();
+    if (!this.renderToTexture) return;
+    if (this.outputTexture && this.reuseOutputTexture) return;
 
+    const gl = this.rasterContext.getGlContext();      
     this.outputTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.outputTexture);
 
@@ -572,8 +580,8 @@ export class ProcessingNode {
       );
     }
 
-    // Create a framebuffer object (FBO)
-    this.framebuffer = gl.createFramebuffer();
+    // Create a framebuffer object (FBO) only if not already created
+    this.framebuffer ??= gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
 
     // Attach the texture as a color attachment to the FBO

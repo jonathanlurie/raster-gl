@@ -1,3 +1,5 @@
+import { cavityShading } from './demos/cavity-shading';
+import { buildGaussianKernelFromRadius } from './demos/common';
 import { ProcessingNode, RasterContext, Texture, U_TYPE } from './lib';
 import './style.css'
 
@@ -203,62 +205,12 @@ async function demo3() {
 }
 
 
-
-const Z_FOR_CENTRAL_MASS: Record<number, number> = {
-  0.90: 1.644854,
-  0.95: 1.959964,
-  0.98: 2.326348,
-  0.99: 2.575829,
-  0.995: 2.807034,
-  0.997: 3.0,      // common rule-of-thumb (≈ 99.73%)
-  0.999: 3.290527
-};
-
-export function sigmaFromRadius(
-  radius: number,
-  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.99
-): number {
-  if (radius <= 0) return 1e-6;
-  const z = Z_FOR_CENTRAL_MASS[centralMass];
-  return radius / z;
-}
-
-export function buildGaussianKernelFromRadius(
-  radius: number,
-  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.95
-): Float32Array {
-  const sigma = sigmaFromRadius(radius, centralMass);
-  return buildGaussianKernel(radius, sigma);
-}
-
-
-export function buildGaussianKernel(radius: number, sigma: number): Float32Array {
-  const size = radius * 2 + 1;
-  const kernel = new Float32Array(size);
-  const sigma2 = sigma * sigma * 2;
-  let sum = 0;
-
-  for (let i = -radius; i <= radius; i++) {
-    const value = Math.exp(-(i * i) / sigma2);
-    kernel[i + radius] = value;
-    sum += value;
-  }
-
-  // Normalize kernel
-  for (let i = 0; i < size; i++) {
-    kernel[i] /= sum;
-  }
-
-  return kernel;
-}
-
-
 async function demo4() {
 
-  const kernel = Array.from(buildGaussianKernelFromRadius(60));
+  console.time("kernel");
+  const kernel = Array.from(buildGaussianKernelFromRadius(1));
+  console.timeEnd("kernel");
   console.log("kernel", kernel);
-  
-
 
   const rctx = new RasterContext({
     width: 512,
@@ -278,8 +230,7 @@ async function demo4() {
 
   console.log(tileUrl);
   
-
-  const tex = await Texture.fromURL(rctx, tileUrl);
+  const tex = await Texture.fromURL(rctx, tileUrl, {bilinear: false});
 
   const fragmentShaderBlurPass = `
   #version 300 es
@@ -330,13 +281,10 @@ async function demo4() {
         neighborPosition.y = uv.y + float(i - halfKernelSize) * unitVerticalStep; 
       }
        
-
       vec4 color = texture(u_tile, neighborPosition);
       float elevation = terrariumToElevation(color);
       sum += u_kernel[i] * elevation;
     }
-
-
 
     fragColor = elevationToTerrarium(sum);
   }
@@ -374,11 +322,35 @@ async function demo4() {
   n2.setUniformTexture2D("u_tile", n1)
   n2.render();
 
-
   console.timeEnd("compute")
+
+
+  const loop = () => {
+    const kernelSize = ~~((Math.cos(performance.now() / 500) + 1) * 30);
+    const kernel = Array.from(buildGaussianKernelFromRadius(kernelSize));
+
+    console.time("renderLoop")
+    n1.setUniformNumber("u_kernel", kernel);
+    n1.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    n1.render();
+
+    n2.setUniformTexture2D("u_tile", n1)
+    n2.setUniformNumber("u_kernel", kernel);
+    n2.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    n2.render();
+
+    console.timeEnd("renderLoop")
+
+    // return;
+    requestAnimationFrame(loop);
+  }
+
+  loop();
 
   console.log(n2.getPixelData());
 }
 
 
-demo4()
+
+// demo4()
+cavityShading()
