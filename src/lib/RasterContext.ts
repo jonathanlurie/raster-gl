@@ -1,3 +1,4 @@
+import type { ProcessingNode } from "./ProcessingNode";
 import type { Texture } from "./Texture";
 
 export type RasterContextOptions = {
@@ -31,6 +32,7 @@ export class RasterContext {
   private readonly offscreen: boolean;
   private readonly gl: WebGL2RenderingContext;
   private readonly registeredTextures: Texture[] = [];
+  private readonly registeredProcessingNodes: ProcessingNode[] = [];
 
   constructor(options: RasterContextOptions) {
     this.offscreen = options.offscreen ?? false;
@@ -80,5 +82,21 @@ export class RasterContext {
     this.registeredTextures.push(tex);
   }
 
+  registerProcessingNode(node: ProcessingNode) {
+    this.registeredProcessingNodes.push(node);
+  }
+
+  /**
+   * Free textures and processing nodes from GPU memory
+   */
+  free() {
+    for (const node of this.registeredProcessingNodes) {
+      node.free();
+    }
+
+    for (const tex of this.registeredTextures) {
+      tex.free();
+    }
+  }
 
 }

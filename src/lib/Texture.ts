@@ -2,7 +2,6 @@ import type { ProcessingNode } from "./ProcessingNode";
 import type { RasterContext } from "./RasterContext";
 import {
   getUnusedTextureUnit,
-  getDefaultGlContext,
   freeTextureUnit,
 } from "./gltools";
 
@@ -272,9 +271,22 @@ export class Texture {
       return;
     }
 
-    const gl = getDefaultGlContext();
+    const gl = this.rasterContext.getGlContext();
+
+    // Unbind if this texture is currently bound in this context.
+    // WebGL will generally handle delete + existing bindings gracefully, but
+    // unbinding avoids "use-after-free" patterns
+    const isBound =
+      gl.getParameter(gl.TEXTURE_BINDING_2D) === this._texture;
+
+    if (isBound) {
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+
     gl.deleteTexture(this._texture);
     this._texture = null;
+
+    // Release the (client-side) texture unit bookkeeping.
     this.rest();
   }
 

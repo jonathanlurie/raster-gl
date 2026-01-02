@@ -29,21 +29,6 @@ export function incrementCurrentTextureUnit() {
   currentTextureUnit++;
 }
 
-/**
- * Returns a default gl context of the default size (512 x 512)
- * @returns
- */
-export function getDefaultGlContext(): WebGL2RenderingContext {
-  if (defaultGlContext === null) {
-    const gl = prepareGlContext({
-      width: DEFAULT_WIDTH,
-      height: DEFAULT_HEIGHT,
-    });
-    defaultGlContext = gl;
-  }
-
-  return defaultGlContext;
-}
 
 // From Fragment.ink
 export function getShaderCompileError(

@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "biome": "biome check --max-diagnostics=1000",
+    "biome:fix": "biome check --max-diagnostics=1000 --write"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.10",
     "typescript": "~5.9.3",
     "vite": "npm:rolldown-vite@7.2.5"
   },

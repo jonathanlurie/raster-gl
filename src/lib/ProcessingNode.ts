@@ -86,8 +86,9 @@ export class ProcessingNode {
   private shaderProgramError: string | null = null;
   private uniforms: { [key: string]: UniformData } = {};
   private clearColor: RGBAUnitColor = [0, 0, 0, 1];
-  private outputTexture: WebGLTexture | null = null;
+  private outputTexture: Texture | null = null;
   private framebuffer: WebGLFramebuffer | null = null;
+  private positionBuffer: WebGLBuffer | null = null;
   // private isOffscreen: boolean;
   private readonly uint32: boolean = false;
 
@@ -614,8 +615,8 @@ export class ProcessingNode {
       "a_position"
     );
 
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    this.positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
 
     // Define the vertices of the rectangle
     const vertices = [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
@@ -649,13 +650,7 @@ export class ProcessingNode {
       return Texture.fromImageSource(this.rasterContext, this.getNewOffscreenCanvas());
     };
 
-    return new Texture(
-      this.rasterContext,
-      this.outputTexture,
-      this.outputWidth,
-      this.outputHeight,
-      this.uint32 ? 32 : 8
-    );
+    return this.outputTexture;
   }
 
   private initRenderToTextureLogic() {
@@ -663,8 +658,16 @@ export class ProcessingNode {
     if (this.outputTexture && this.reuseOutputTexture) return;
 
     const gl = this.rasterContext.getGlContext();      
-    this.outputTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this.outputTexture);
+    const outputTextureGl = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, outputTextureGl);
+
+    this.outputTexture = new Texture(
+      this.rasterContext,
+      outputTextureGl,
+      this.outputWidth,
+      this.outputHeight,
+      this.uint32 ? 32 : 8
+    );
 
     // Set the texture parameters
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -708,7 +711,7 @@ export class ProcessingNode {
       gl.FRAMEBUFFER,
       gl.COLOR_ATTACHMENT0,
       gl.TEXTURE_2D,
-      this.outputTexture,
+      outputTextureGl,
       0
     );
 
@@ -727,7 +730,7 @@ export class ProcessingNode {
     const gl = this.rasterContext.getGlContext();
 
     if (this.renderToTexture && this.outputTexture && this.framebuffer) {
-      gl.bindTexture(gl.TEXTURE_2D, this.outputTexture);
+      gl.bindTexture(gl.TEXTURE_2D, this.outputTexture.texture);
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
       gl.bindTexture(gl.TEXTURE_2D, null);
     } else {
@@ -951,5 +954,39 @@ export class ProcessingNode {
 
   doesOutputNeedUpdate(): boolean {
     return this.outputNeedUpdate
+  }
+
+  /**
+   * Freeing element from GPU memory
+   */
+  free() {
+    const gl = this.rasterContext.getGlContext();
+
+    if (this.framebuffer) {
+      // Detach any attachment to avoid keeping references alive
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        null,
+        0
+      );
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      gl.deleteFramebuffer(this.framebuffer);
+      this.framebuffer = null;
+    }
+
+    if (this.outputTexture) {
+      this.outputTexture.free();
+    }
+
+    this.resetProgram();
+
+    if (this.positionBuffer) {
+      gl.deleteBuffer(this.positionBuffer);
+      this.positionBuffer = null;
+    }
   }
 }

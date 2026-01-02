@@ -143,6 +143,9 @@ export async function cavityShading() {
     offscreen: false,
   });
 
+  console.log("rctx", rctx);
+  
+
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
