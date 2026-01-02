@@ -7,23 +7,22 @@ export type RasterContextOptions = {
    * Note that each ProcessingNode can have a width different from the RasterContext
    * it is bound to.
    */
-  width: number,
+  width: number;
 
   /**
    * Height of the canvas.
    * Note that each ProcessingNode can have a height different from the RasterContext
    * it is bound to.
    */
-  height: number,
+  height: number;
 
   /**
    * If true, internally instantiates an OffscreenCanvas instead of an HTML Canvas Element.
    * This is particularly handy for web workers.
    * Default: false
    */
-  offscreen?: boolean
-}
-
+  offscreen?: boolean;
+};
 
 export class RasterContext {
   private readonly canvas: HTMLCanvasElement | OffscreenCanvas;
@@ -49,7 +48,7 @@ export class RasterContext {
 
     const gl = this.canvas.getContext("webgl2", {
       alpha: true,
-      premultipliedAlpha: false
+      premultipliedAlpha: false,
     }) as WebGL2RenderingContext;
 
     if (!gl) {
@@ -67,11 +66,11 @@ export class RasterContext {
     return this.gl;
   }
 
-  getSize(): {width: number, height: number} {
+  getSize(): { width: number; height: number } {
     return {
       width: this.width,
       height: this.height,
-    }
+    };
   }
 
   isOffscreen(): boolean {
@@ -98,5 +97,4 @@ export class RasterContext {
       tex.free();
     }
   }
-
 }

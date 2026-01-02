@@ -1,20 +1,15 @@
 // Note: if target canvas is resized: https://webglfundamentals.org/webgl/lessons/webgl-resizing-the-canvas.html
 
-import {
-  compileShader,
-  createProgram,
-} from "./gltools";
-import { isArrayOfTexture, isTexture, UNIFORM_TYPE, type Vec2, type Vec3, type Vec4 } from "./typetester";
-import defaultVertexShader from "./shaders/default.vs.glsl?raw";
-import defaultFragmentShader from "./shaders/default.fs.glsl?raw";
-import { Texture } from "./Texture";
+import { compileShader, createProgram } from "./gltools";
 import type { RasterContext } from "./RasterContext";
+import defaultFragmentShader from "./shaders/default.fs.glsl?raw";
+import defaultVertexShader from "./shaders/default.vs.glsl?raw";
+import { Texture } from "./Texture";
+import { isArrayOfTexture, isTexture, UNIFORM_TYPE, type Vec2, type Vec3, type Vec4 } from "./typetester";
 
 // Many uniform functions exist and they have different signature depending on type
 // but this kind of covers all the usages
-// biome-ignore lint/suspicious/noExplicitAny: any is necessay here
-type UniformFunction  = (location: WebGLUniformLocation | null, ...args: any[]) => void;
-
+type UniformFunction = (location: WebGLUniformLocation | null, ...args: any[]) => void;
 
 type UniformData = {
   /**
@@ -50,12 +45,7 @@ type UniformData = {
   /**
    * Array of arguments to pass to `uniformFunction`
    */
-  uniformFunctionArguments:
-    | number[]
-    | number[][]
-    | Texture[]
-    | Texture[][]
-    | null;
+  uniformFunctionArguments: number[] | number[][] | Texture[] | Texture[][] | null;
 
   /**
    * Tells if this uniform is a texture
@@ -95,14 +85,14 @@ export class ProcessingNode {
   constructor(
     rasterContext: RasterContext,
     options: {
-      renderToTexture?: boolean,
+      renderToTexture?: boolean;
 
       /**
        * When true, the same output texture is reused for every render call (convenient for multipass animation)
        * When false, a new texture is created for each render call (convenient to reuse the same node to create different outputs)
        * Used only if renderToTexture is true.
        */
-      reuseOutputTexture?: boolean,
+      reuseOutputTexture?: boolean;
       width?: number;
       height?: number;
       uint32?: boolean;
@@ -111,8 +101,8 @@ export class ProcessingNode {
        * The clear color is of form RGBA where each channel is a value in [0, 1].
        * Default: [0, 0, 0, 1]
        */
-      clearColor?: [number, number, number, number],
-    } = {}
+      clearColor?: [number, number, number, number];
+    } = {},
   ) {
     this.rasterContext = rasterContext;
     const ctxSize = this.rasterContext.getSize();
@@ -128,18 +118,15 @@ export class ProcessingNode {
       gl.canvas.width = this.outputWidth;
       gl.canvas.height = this.outputHeight;
     } else {
-
       if (this.uint32) {
-        throw new Error(
-          "A Node can only output uint32 when rendering to texture."
-        );
+        throw new Error("A Node can only output uint32 when rendering to texture.");
       }
 
       // Particularity for hi-DPI screens
       gl.canvas.width = this.outputWidth * devicePixelRatio;
       gl.canvas.height = this.outputHeight * devicePixelRatio;
-      
-      if ( !(gl.canvas instanceof OffscreenCanvas)) {
+
+      if (!(gl.canvas instanceof OffscreenCanvas)) {
         gl.canvas.style.width = `${this.outputWidth}px`;
         gl.canvas.style.height = `${this.outputHeight}px`;
       }
@@ -191,32 +178,16 @@ export class ProcessingNode {
     this.fragmentShaderError = null;
   }
 
-  setShaderSource(
-    options: {
-      vertexShaderSource?: string;
-      fragmentShaderSource?: string;
-      throw?: boolean;
-    } = {}
-  ) {
+  setShaderSource(options: { vertexShaderSource?: string; fragmentShaderSource?: string; throw?: boolean } = {}) {
     this.resetProgram();
 
     const shouldThrow = options.throw ?? true;
-    const vertexShaderSource =
-      options.vertexShaderSource ?? defaultVertexShader;
-    const fragmentShaderSource =
-      options.fragmentShaderSource ?? defaultFragmentShader;
+    const vertexShaderSource = options.vertexShaderSource ?? defaultVertexShader;
+    const fragmentShaderSource = options.fragmentShaderSource ?? defaultFragmentShader;
 
     const gl = this.rasterContext.getGlContext();
-    const vertexShaderData = compileShader(
-      gl,
-      gl.VERTEX_SHADER,
-      vertexShaderSource
-    );
-    const fragmentShaderData = compileShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      fragmentShaderSource
-    );
+    const vertexShaderData = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShaderData = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
     this.compiledVertexShader = vertexShaderData.shader;
     this.compiledFragmentShader = fragmentShaderData.shader;
     this.vertexShaderError = vertexShaderData.error;
@@ -231,14 +202,9 @@ export class ProcessingNode {
       }
     }
 
-    if (vertexShaderData.shader === null || fragmentShaderData.shader === null)
-      return;
+    if (vertexShaderData.shader === null || fragmentShaderData.shader === null) return;
 
-    const programData = createProgram(
-      gl,
-      vertexShaderData.shader,
-      fragmentShaderData.shader
-    );
+    const programData = createProgram(gl, vertexShaderData.shader, fragmentShaderData.shader);
     this.shaderProgram = programData.program;
     this.shaderProgramError = programData.error;
 
@@ -284,11 +250,7 @@ export class ProcessingNode {
     }
 
     // If Array of booleans, do like ints
-    else if (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      typeof value[0] === "boolean"
-    ) {
+    else if (Array.isArray(value) && value.length > 0 && typeof value[0] === "boolean") {
       u.uniformFunction = gl.uniform1iv;
       u.uniformFunctionArguments = [value.map((el: boolean) => +el)];
       this.uniforms[name] = u;
@@ -301,11 +263,7 @@ export class ProcessingNode {
    * Add a number or an array of numbers a uniform.
    * The type is float by default but can be enforce to a integer
    */
-  setUniformNumber(
-    name: string,
-    value: number | number[],
-    type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT
-  ) {
+  setUniformNumber(name: string, value: number | number[], type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
     this.outputNeedUpdate = true;
     const gl = this.rasterContext.getGlContext();
     let u: UniformData;
@@ -339,24 +297,14 @@ export class ProcessingNode {
     }
 
     // If Array of float
-    else if (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      typeof value[0] === "number" &&
-      type === UNIFORM_TYPE.FLOAT
-    ) {
+    else if (Array.isArray(value) && value.length > 0 && typeof value[0] === "number" && type === UNIFORM_TYPE.FLOAT) {
       u.uniformFunction = gl.uniform1fv;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     }
 
     // If Array of int
-    else if (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      typeof value[0] === "number" &&
-      type === UNIFORM_TYPE.INT
-    ) {
+    else if (Array.isArray(value) && value.length > 0 && typeof value[0] === "number" && type === UNIFORM_TYPE.INT) {
       u.uniformFunction = gl.uniform1iv;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
@@ -368,10 +316,7 @@ export class ProcessingNode {
   /**
    * Add a texture as uniform
    */
-  setUniformTexture2D(
-    name: string,
-    value: Texture | ProcessingNode /* | Texture[]*/
-  ) {
+  setUniformTexture2D(name: string, value: Texture | ProcessingNode /* | Texture[]*/) {
     this.outputNeedUpdate = true;
     let u: UniformData;
     const gl = this.rasterContext.getGlContext();
@@ -431,12 +376,12 @@ export class ProcessingNode {
       u.needsUpdate = true;
     } else {
       u = {
-      name,
-      needsUpdate: true,
-      location: null,
-      forcedType: type,
-      uniformFunction: null,
-      uniformFunctionArguments: null,
+        name,
+        needsUpdate: true,
+        location: null,
+        forcedType: type,
+        uniformFunction: null,
+        uniformFunctionArguments: null,
       };
     }
 
@@ -467,12 +412,12 @@ export class ProcessingNode {
       u.needsUpdate = true;
     } else {
       u = {
-      name,
-      needsUpdate: true,
-      location: null,
-      forcedType: type,
-      uniformFunction: null,
-      uniformFunctionArguments: null,
+        name,
+        needsUpdate: true,
+        location: null,
+        forcedType: type,
+        uniformFunction: null,
+        uniformFunctionArguments: null,
       };
     }
 
@@ -493,7 +438,6 @@ export class ProcessingNode {
     }
   }
 
-
   setUniformVector4(name: string, value: Vec4 /*| Array<vec4>*/, type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
     this.outputNeedUpdate = true;
     const gl = this.rasterContext.getGlContext();
@@ -504,12 +448,12 @@ export class ProcessingNode {
       u.needsUpdate = true;
     } else {
       u = {
-      name,
-      needsUpdate: true,
-      location: null,
-      forcedType: type,
-      uniformFunction: null,
-      uniformFunctionArguments: null,
+        name,
+        needsUpdate: true,
+        location: null,
+        forcedType: type,
+        uniformFunction: null,
+        uniformFunctionArguments: null,
       };
     }
 
@@ -533,7 +477,7 @@ export class ProcessingNode {
   /**
    * Set a RGB color as uniform, where each color channel is in [0, 255]
    */
-  setUniformRGB(name:string, value: Vec3) {
+  setUniformRGB(name: string, value: Vec3) {
     this.setUniformVector3(name, [value[0] / 255, value[1] / 255, value[2] / 255]);
   }
 
@@ -541,7 +485,7 @@ export class ProcessingNode {
    * Set a RGB color as uniform, where each color channel (RGB) is in [0, 255]
    * and transparency is in [0, 1]
    */
-  setUniformRGBA(name:string, value: Vec4) {
+  setUniformRGBA(name: string, value: Vec4) {
     this.setUniformVector4(name, [value[0] / 255, value[1] / 255, value[2] / 255, value[3]]);
   }
 
@@ -553,43 +497,36 @@ export class ProcessingNode {
       return;
     }
 
-    const uniformArray = Object.keys(this.uniforms).map(
-      (k: string) => this.uniforms[k]
-    );
+    const uniformArray = Object.keys(this.uniforms).map((k: string) => this.uniforms[k]);
     const textureUniforms = uniformArray.filter((u) => u.isTexture);
     const nonTextureUniforms = uniformArray.filter((u) => !u.isTexture);
 
-    // biome-ignore lint/complexity/noForEach: <explanation>
-    nonTextureUniforms.forEach((u) => {
+    for (const u of nonTextureUniforms) {
       if (!u.needsUpdate) return;
       if (!u.uniformFunction) return;
-      if (!u.uniformFunctionArguments) return;      
+      if (!u.uniformFunctionArguments) return;
 
       // If it's the first use of this uniform, we have to find a location for it
       u.location ??= gl.getUniformLocation(program, u.name);
 
       // Set the value
-      u.uniformFunction.apply(gl, [
-        u.location,
-        ...u.uniformFunctionArguments,
-      ]);
+      u.uniformFunction.apply(gl, [u.location, ...u.uniformFunctionArguments]);
 
       u.needsUpdate = false;
-    });
+    }
 
     // The case of texture uniforms is handled separately.
     // More info: See: https://webglfundamentals.org/webgl/lessons/webgl-2-textures.html
-    // biome-ignore lint/complexity/noForEach: <explanation>
-    textureUniforms.forEach((u) => {
+    for (const u of textureUniforms) {
       if (!u.needsUpdate) return;
       if (!u.uniformFunction) return;
       if (!u.uniformFunctionArguments) return;
       if (!u.fragmentTexture) return;
-      
+
       // If it's the first use of this uniform, we have to find a location for it
       u.location ??= gl.getUniformLocation(program, u.name);
 
-      const textureUnit = u.fragmentTexture.textureUnit;      
+      const textureUnit = u.fragmentTexture.textureUnit;
 
       gl.activeTexture(gl.TEXTURE0 + textureUnit);
       gl.bindTexture(gl.TEXTURE_2D, u.fragmentTexture.texture);
@@ -598,7 +535,7 @@ export class ProcessingNode {
       u.uniformFunction.apply(gl, [u.location, textureUnit]);
 
       u.needsUpdate = false;
-    });
+    }
   }
 
   private initPlane() {
@@ -610,10 +547,7 @@ export class ProcessingNode {
     if (!program) return;
     // gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-    this.positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
+    this.positionAttributeLocation = gl.getAttribLocation(program, "a_position");
 
     this.positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
@@ -624,14 +558,7 @@ export class ProcessingNode {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 
     gl.enableVertexAttribArray(this.positionAttributeLocation);
-    gl.vertexAttribPointer(
-      this.positionAttributeLocation,
-      2,
-      gl.FLOAT,
-      false,
-      0,
-      0
-    );
+    gl.vertexAttribPointer(this.positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
   }
 
   /**
@@ -648,7 +575,7 @@ export class ProcessingNode {
     if (!this.outputTexture) {
       console.warn("[GPU readback necessary] This node is not rendering to a texture.");
       return Texture.fromImageSource(this.rasterContext, this.getNewOffscreenCanvas());
-    };
+    }
 
     return this.outputTexture;
   }
@@ -657,7 +584,7 @@ export class ProcessingNode {
     if (!this.renderToTexture) return;
     if (this.outputTexture && this.reuseOutputTexture) return;
 
-    const gl = this.rasterContext.getGlContext();      
+    const gl = this.rasterContext.getGlContext();
     const outputTextureGl = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, outputTextureGl);
 
@@ -666,7 +593,7 @@ export class ProcessingNode {
       outputTextureGl,
       this.outputWidth,
       this.outputHeight,
-      this.uint32 ? 32 : 8
+      this.uint32 ? 32 : 8,
     );
 
     // Set the texture parameters
@@ -686,20 +613,10 @@ export class ProcessingNode {
         0,
         gl.RGBA_INTEGER,
         gl.UNSIGNED_INT,
-        null
+        null,
       );
     } else {
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        this.outputWidth,
-        this.outputHeight,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null
-      );
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.outputWidth, this.outputHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     }
 
     // Create a framebuffer object (FBO) only if not already created
@@ -707,20 +624,11 @@ export class ProcessingNode {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
 
     // Attach the texture as a color attachment to the FBO
-    gl.framebufferTexture2D(
-      gl.FRAMEBUFFER,
-      gl.COLOR_ATTACHMENT0,
-      gl.TEXTURE_2D,
-      outputTextureGl,
-      0
-    );
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTextureGl, 0);
 
     // Check if the FBO is complete and properly set up
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-      console.error(
-        "Framebuffer is not complete.",
-        gl.checkFramebufferStatus(gl.FRAMEBUFFER)
-      );
+      console.error("Framebuffer is not complete.", gl.checkFramebufferStatus(gl.FRAMEBUFFER));
     }
   }
 
@@ -750,7 +658,7 @@ export class ProcessingNode {
 
     this.outputNeedUpdate = false;
   }
-/*
+  /*
   testVertexBuffer() {
     if (!this.shaderProgram) return;
 
@@ -815,7 +723,7 @@ export class ProcessingNode {
     if (!this.shaderProgram) return;
 
     const gl = this.rasterContext.getGlContext();
-    
+
     // make sure the program of this node is attached to the gl context
     // (if .setShaderSource() is called on a different node before this
     // node has rendered, this would otherwise cause mix match)
@@ -833,12 +741,7 @@ export class ProcessingNode {
 
     // For some reasons clearing does not work if output is uint32
     if (!this.uint32) {
-      gl.clearColor(
-        this.clearColor[0],
-        this.clearColor[1],
-        this.clearColor[2],
-        this.clearColor[3]
-      );
+      gl.clearColor(this.clearColor[0], this.clearColor[1], this.clearColor[2], this.clearColor[3]);
       gl.clear(gl.COLOR_BUFFER_BIT);
     }
 
@@ -861,9 +764,7 @@ export class ProcessingNode {
    * If this node was instanciated with `uint32` being `false` (which is the default), then
    * the returned typed array is a Uint8Array
    */
-  getPixelData(
-    asFloat = false
-  ): Uint8Array | Uint32Array | Float32Array {
+  getPixelData(asFloat = false): Uint8Array | Uint32Array | Float32Array {
     const gl = this.rasterContext.getGlContext();
     const w = gl.canvas.width;
     const h = gl.canvas.height;
@@ -887,7 +788,7 @@ export class ProcessingNode {
 
   getImageData(): ImageData {
     if (this.uint32) {
-      throw new Error("Uint32 image cannot be used to create an RGBA8 image.")
+      throw new Error("Uint32 image cannot be used to create an RGBA8 image.");
     }
 
     const gl = this.rasterContext.getGlContext();
@@ -898,7 +799,6 @@ export class ProcessingNode {
     imageData.data.set(pixelData);
     return imageData;
   }
-
 
   async getImageBitmap(): Promise<ImageBitmap> {
     const imageData = this.getImageData();
@@ -953,7 +853,7 @@ export class ProcessingNode {
   }
 
   doesOutputNeedUpdate(): boolean {
-    return this.outputNeedUpdate
+    return this.outputNeedUpdate;
   }
 
   /**
@@ -965,13 +865,7 @@ export class ProcessingNode {
     if (this.framebuffer) {
       // Detach any attachment to avoid keeping references alive
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-      gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        null,
-        0
-      );
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       gl.deleteFramebuffer(this.framebuffer);

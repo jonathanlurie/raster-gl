@@ -1,9 +1,6 @@
+import { freeTextureUnit, getUnusedTextureUnit } from "./gltools";
 import type { ProcessingNode } from "./ProcessingNode";
 import type { RasterContext } from "./RasterContext";
-import {
-  getUnusedTextureUnit,
-  freeTextureUnit,
-} from "./gltools";
 
 export type TextureOptions = {
   /**
@@ -31,10 +28,8 @@ const defaultOptionValues: TextureOptions = {
   bilinear: true,
 };
 
-
-
 export async function fetchAsImageBitmap(url: string, abortSignal?: AbortSignal): Promise<ImageBitmap> {
-  const response = await fetch(url, {signal: abortSignal});
+  const response = await fetch(url, { signal: abortSignal });
   if (!response.ok) {
     throw new Error(`Fetch failed: ${response.status}`);
   }
@@ -43,7 +38,6 @@ export async function fetchAsImageBitmap(url: string, abortSignal?: AbortSignal)
   const imageBitmap = await createImageBitmap(blob);
   return imageBitmap;
 }
-
 
 export class Texture {
   public readonly width: number;
@@ -66,9 +60,7 @@ export class Texture {
       ...defaultOptionValues,
       ...options,
     };
-    const interpolation = optionsWithDefault.bilinear
-      ? gl.LINEAR
-      : gl.NEAREST;
+    const interpolation = optionsWithDefault.bilinear ? gl.LINEAR : gl.NEAREST;
 
     const texture = gl.createTexture();
 
@@ -81,14 +73,7 @@ export class Texture {
 
     // Upload the image data to the texture
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      image
-    );
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
     // Set texture parameters (you can adjust these as needed)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -118,25 +103,13 @@ export class Texture {
       throw new Error(`Image dimensions are invalid (${width}, ${height})`);
     }
 
-    return new Texture(
-      rasterContext,
-      texture,
-      width,
-      height,
-      8
-    );
+    return new Texture(rasterContext, texture, width, height, 8);
   }
-
-
 
   /**
    * Create a Texture instance from the URL of an image (png or jpeg)
    */
-  static async fromURL(
-    rasterContext: RasterContext,
-    url: string,
-    options: TextureOptions = {}
-  ): Promise<Texture> {
+  static async fromURL(rasterContext: RasterContext, url: string, options: TextureOptions = {}): Promise<Texture> {
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Fetch failed: ${response.status}`);
@@ -147,13 +120,12 @@ export class Texture {
     return Texture.fromImageSource(rasterContext, imageBitmap, options);
   }
 
-
   static fromData(
     rasterContext: RasterContext,
     data: Uint8Array,
     width: number,
     height: number,
-    options: TextureOptions = {}
+    options: TextureOptions = {},
   ): Texture {
     const gl = rasterContext.getGlContext();
     const texture = gl.createTexture();
@@ -177,33 +149,13 @@ export class Texture {
 
     if (numberOfElementPerPixel === 3) {
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGB,
-        width,
-        height,
-        0,
-        gl.RGB,
-        gl.UNSIGNED_BYTE,
-        data
-      );
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data);
     } else if (numberOfElementPerPixel === 4) {
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        width,
-        height,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        data
-      );
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
     } else {
       throw new Error(
-        "Invalid number of elements per pixel. The data texture must contain 1, 3 or 4 elements per pixel."
+        "Invalid number of elements per pixel. The data texture must contain 1, 3 or 4 elements per pixel.",
       );
     }
 
@@ -215,22 +167,10 @@ export class Texture {
 
     gl.bindTexture(gl.TEXTURE_2D, null);
 
-    return new Texture(
-      rasterContext,
-      texture,
-      width,
-      height,
-      data.BYTES_PER_ELEMENT * 8
-    );
+    return new Texture(rasterContext, texture, width, height, data.BYTES_PER_ELEMENT * 8);
   }
 
-  constructor(
-    rasterContext: RasterContext,
-    texture: WebGLTexture,
-    width: number,
-    height: number,
-    bitDepth: number
-  ) {
+  constructor(rasterContext: RasterContext, texture: WebGLTexture, width: number, height: number, bitDepth: number) {
     this._texture = texture;
     this.width = width;
     this.height = height;
@@ -276,8 +216,7 @@ export class Texture {
     // Unbind if this texture is currently bound in this context.
     // WebGL will generally handle delete + existing bindings gracefully, but
     // unbinding avoids "use-after-free" patterns
-    const isBound =
-      gl.getParameter(gl.TEXTURE_BINDING_2D) === this._texture;
+    const isBound = gl.getParameter(gl.TEXTURE_BINDING_2D) === this._texture;
 
     if (isBound) {
       gl.bindTexture(gl.TEXTURE_2D, null);
@@ -292,10 +231,7 @@ export class Texture {
 
   private getIndexUsageRecord(node: ProcessingNode, uniformName: string): number {
     for (let i = 0; i < this.usageRecords.length; i += 1) {
-      if (
-        this.usageRecords[i].node === node &&
-        this.usageRecords[i].uniformName === uniformName
-      ) {
+      if (this.usageRecords[i].node === node && this.usageRecords[i].uniformName === uniformName) {
         return i;
       }
     }

@@ -1,9 +1,7 @@
 import { ProcessingNode, RasterContext, Texture, UNIFORM_TYPE } from "../lib";
 import { buildGaussianKernelFromRadius } from "./common";
 
-
-const appDiv = document.getElementById('app') as HTMLDivElement;
-
+const appDiv = document.getElementById("app") as HTMLDivElement;
 
 const terrariumToElevation = `
 // Decoding Terrarium encoding
@@ -11,7 +9,6 @@ float terrariumToElevation(vec4 color) {
   return (color.r * 255.0 * 256.0 + color.g * 255.0 + color.b * 255.0 / 256.0) - 32768.0;
 }
 `.trim();
-
 
 const elevationToTerrarium = `
 // Encoding elevation to Terrarium
@@ -73,7 +70,6 @@ void main() {
 }
 `.trim();
 
-
 const fragmentShaderCombine = `
 #version 300 es
 precision highp float;
@@ -134,8 +130,6 @@ void main() {
 
 `.trim();
 
-
-
 export async function cavityShading() {
   const rctx = new RasterContext({
     width: 512,
@@ -144,19 +138,15 @@ export async function cavityShading() {
   });
 
   console.log("rctx", rctx);
-  
 
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
-  const tileUrl = tileUrlPattern
-    .replace("{z}", "10")
-    .replace("{x}", "532")
-    .replace("{y}", "363")
+  const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
-  const tex = await Texture.fromURL(rctx, tileUrl, {bilinear: false});
+  const tex = await Texture.fromURL(rctx, tileUrl, { bilinear: false });
 
-  console.time("compute")
+  console.time("compute");
   const lowPassTextures: Record<number, Texture | null> = {
     3: null,
     7: null,
@@ -173,7 +163,7 @@ export async function cavityShading() {
     60: 1,
   } as const;
 
-  const kernelRadii = Object.keys(lowPassTextures).map(r => Number.parseInt(r));
+  const kernelRadii = Object.keys(lowPassTextures).map((r) => Number.parseInt(r, 10));
 
   const lowPassHorizontalNode = new ProcessingNode(rctx, {
     renderToTexture: true,
@@ -195,26 +185,26 @@ export async function cavityShading() {
 
   for (const radius of kernelRadii) {
     // console.log("radius... ", radius);
-    
+
     const kernel = Array.from(buildGaussianKernelFromRadius(radius));
 
     lowPassHorizontalNode.setUniformNumber("u_kernel", kernel);
     lowPassHorizontalNode.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     lowPassHorizontalNode.setUniformBoolean("u_isHorizontalPass", true);
-    lowPassHorizontalNode.setUniformTexture2D("u_tile", tex)
+    lowPassHorizontalNode.setUniformTexture2D("u_tile", tex);
     lowPassHorizontalNode.render();
 
     lowPassVerticalNode.setUniformNumber("u_kernel", kernel);
     lowPassVerticalNode.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     lowPassVerticalNode.setUniformBoolean("u_isHorizontalPass", false);
-    lowPassVerticalNode.setUniformTexture2D("u_tile", lowPassHorizontalNode)
+    lowPassVerticalNode.setUniformTexture2D("u_tile", lowPassHorizontalNode);
     lowPassVerticalNode.render();
 
     lowPassTextures[radius] = lowPassVerticalNode.getOutputTexture();
   }
 
-  const combineNode = new ProcessingNode(rctx, {renderToTexture: false});
-  
+  const combineNode = new ProcessingNode(rctx, { renderToTexture: false });
+
   combineNode.setShaderSource({
     fragmentShaderSource: fragmentShaderCombine,
   });
@@ -237,10 +227,8 @@ export async function cavityShading() {
 
   combineNode.render();
 
-  
-  
-  const pixelData = combineNode.getPixelData()
-  console.timeEnd("compute")
+  const pixelData = combineNode.getPixelData();
+  console.timeEnd("compute");
 
   console.log(pixelData);
 }

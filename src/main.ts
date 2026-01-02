@@ -1,13 +1,11 @@
-import { cavityShading } from './demos/cavity-shading';
-import { buildGaussianKernelFromRadius } from './demos/common';
-import { ProcessingNode, RasterContext, Texture, UNIFORM_TYPE } from './lib';
-import './style.css'
+import { cavityShading } from "./demos/cavity-shading";
+import { buildGaussianKernelFromRadius } from "./demos/common";
+import { ProcessingNode, RasterContext, Texture, UNIFORM_TYPE } from "./lib";
+import "./style.css";
 
+const appDiv = document.getElementById("app") as HTMLDivElement;
 
-const appDiv = document.getElementById('app') as HTMLDivElement;
-
-
-function demo1() {
+function _demo1() {
   const rctx = new RasterContext({
     width: 1000,
     height: 800,
@@ -16,7 +14,7 @@ function demo1() {
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
   // The size overwrite will result in a canvas being 200x400
-  const n = new ProcessingNode(rctx, {width: 200, height: 400});
+  const n = new ProcessingNode(rctx, { width: 200, height: 400 });
 
   const fragmentShader = `
   #version 300 es
@@ -44,18 +42,17 @@ function demo1() {
 
   let blue = 0;
   const increaseBlue = () => {
-    blue = (++blue) % 255;
-    
+    blue = ++blue % 255;
+
     n.setUniformNumber("u_blue", blue);
     n.render();
     requestAnimationFrame(increaseBlue);
-  }
+  };
 
   increaseBlue();
 }
 
-
-async function demo2() {
+async function _demo2() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
@@ -65,10 +62,7 @@ async function demo2() {
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
-  const tileUrl = tileUrlPattern
-    .replace("{z}", "10")
-    .replace("{x}", "532")
-    .replace("{y}", "363")
+  const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
   const tex = await Texture.fromURL(rctx, tileUrl);
 
@@ -99,7 +93,7 @@ async function demo2() {
     fragmentShaderSource: fragmentShader,
   });
 
-  n.setUniformTexture2D("u_tile", tex)
+  n.setUniformTexture2D("u_tile", tex);
 
   // console.log(n.getVertexShaderError());
   // console.log(n.getFragmentShaderError());
@@ -109,9 +103,7 @@ async function demo2() {
   console.log(n.getPixelData());
 }
 
-
-
-async function demo3() {
+async function _demo3() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
@@ -120,13 +112,10 @@ async function demo3() {
 
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
-  const n1 = new ProcessingNode(rctx, {renderToTexture: true});
+  const n1 = new ProcessingNode(rctx, { renderToTexture: true });
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
-  const tileUrl = tileUrlPattern
-    .replace("{z}", "10")
-    .replace("{x}", "532")
-    .replace("{y}", "363")
+  const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
   const tex = await Texture.fromURL(rctx, tileUrl);
 
@@ -153,14 +142,11 @@ async function demo3() {
   }
   `.trim();
 
-  
-
   n1.setShaderSource({
     fragmentShaderSource: fragmentShader1,
   });
 
-  
-  n1.setUniformTexture2D("u_tile", tex)
+  n1.setUniformTexture2D("u_tile", tex);
 
   console.log(n1.getVertexShaderError());
   console.log(n1.getFragmentShaderError());
@@ -171,7 +157,7 @@ async function demo3() {
 
   // console.log(n1.getPixelData());
 
-  const n2 = new ProcessingNode(rctx, {renderToTexture: false});
+  const n2 = new ProcessingNode(rctx, { renderToTexture: false });
 
   const fragmentShader2 = `
   #version 300 es
@@ -193,9 +179,6 @@ async function demo3() {
     fragmentShaderSource: fragmentShader2,
   });
 
-  
-
-
   console.time("render");
   n2.setUniformTexture2D("u_tileElevation", n1);
   n2.render();
@@ -204,9 +187,7 @@ async function demo3() {
   console.log(n2.getPixelData());
 }
 
-
-async function demo4() {
-
+async function _demo4() {
   console.time("kernel");
   const kernel = Array.from(buildGaussianKernelFromRadius(1));
   console.timeEnd("kernel");
@@ -220,17 +201,14 @@ async function demo4() {
 
   appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
 
-  const n1 = new ProcessingNode(rctx, {renderToTexture: true});
+  const n1 = new ProcessingNode(rctx, { renderToTexture: true });
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
-  const tileUrl = tileUrlPattern
-    .replace("{z}", "10")
-    .replace("{x}", "532")
-    .replace("{y}", "363")
+  const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
   console.log(tileUrl);
-  
-  const tex = await Texture.fromURL(rctx, tileUrl, {bilinear: false});
+
+  const tex = await Texture.fromURL(rctx, tileUrl, { bilinear: false });
 
   const fragmentShaderBlurPass = `
   #version 300 es
@@ -290,16 +268,15 @@ async function demo4() {
   }
   `.trim();
 
-  console.time("compute")
+  console.time("compute");
   n1.setShaderSource({
     fragmentShaderSource: fragmentShaderBlurPass,
   });
 
-  
   n1.setUniformNumber("u_kernel", kernel);
   n1.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
   n1.setUniformBoolean("u_isHorizontalPass", true);
-  n1.setUniformTexture2D("u_tile", tex)
+  n1.setUniformTexture2D("u_tile", tex);
 
   // console.log(n1.getVertexShaderError());
   // console.log(n1.getFragmentShaderError());
@@ -310,7 +287,7 @@ async function demo4() {
 
   // console.log(n1.getPixelData());
 
-  const n2 = new ProcessingNode(rctx, {renderToTexture: false});
+  const n2 = new ProcessingNode(rctx, { renderToTexture: false });
 
   n2.setShaderSource({
     fragmentShaderSource: fragmentShaderBlurPass,
@@ -319,38 +296,35 @@ async function demo4() {
   n2.setUniformNumber("u_kernel", kernel);
   n2.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
   n2.setUniformBoolean("u_isHorizontalPass", false);
-  n2.setUniformTexture2D("u_tile", n1)
+  n2.setUniformTexture2D("u_tile", n1);
   n2.render();
 
-  console.timeEnd("compute")
-
+  console.timeEnd("compute");
 
   const loop = () => {
     const kernelSize = ~~((Math.cos(performance.now() / 500) + 1) * 30);
     const kernel = Array.from(buildGaussianKernelFromRadius(kernelSize));
 
-    console.time("renderLoop")
+    console.time("renderLoop");
     n1.setUniformNumber("u_kernel", kernel);
     n1.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     n1.render();
 
-    n2.setUniformTexture2D("u_tile", n1)
+    n2.setUniformTexture2D("u_tile", n1);
     n2.setUniformNumber("u_kernel", kernel);
     n2.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     n2.render();
 
-    console.timeEnd("renderLoop")
+    console.timeEnd("renderLoop");
 
     // return;
     requestAnimationFrame(loop);
-  }
+  };
 
   loop();
 
   console.log(n2.getPixelData());
 }
 
-
-
-// demo4()
-cavityShading()
+// _demo4()
+cavityShading();

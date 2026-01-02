@@ -1,17 +1,16 @@
-
 const Z_FOR_CENTRAL_MASS: Record<number, number> = {
-  0.90: 1.644854,
+  0.9: 1.644854,
   0.95: 1.959964,
   0.98: 2.326348,
   0.99: 2.575829,
   0.995: 2.807034,
-  0.997: 3.0,      // common rule-of-thumb (≈ 99.73%)
-  0.999: 3.290527
+  0.997: 3.0, // common rule-of-thumb (≈ 99.73%)
+  0.999: 3.290527,
 };
 
 export function sigmaFromRadius(
   radius: number,
-  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.99
+  centralMass: 0.9 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.99,
 ): number {
   if (radius <= 0) return 1e-6;
   const z = Z_FOR_CENTRAL_MASS[centralMass];
@@ -20,12 +19,11 @@ export function sigmaFromRadius(
 
 export function buildGaussianKernelFromRadius(
   radius: number,
-  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.999
+  centralMass: 0.9 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.999,
 ): Float32Array {
   const sigma = sigmaFromRadius(radius, centralMass);
   return buildGaussianKernel(radius, sigma);
 }
-
 
 export function buildGaussianKernel(radius: number, sigma: number): Float32Array {
   const size = radius * 2 + 1;

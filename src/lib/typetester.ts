@@ -26,7 +26,6 @@ export function isObject(value: unknown): boolean {
   return typeof value === "object" && !Array.isArray(value) && value !== null;
 }
 
-
 export function isBoolean(value: unknown): boolean {
   return typeof value === "boolean";
 }

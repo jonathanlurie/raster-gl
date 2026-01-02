@@ -1,6 +1,5 @@
 export const DEFAULT_WIDTH = 512;
 export const DEFAULT_HEIGHT = 512;
-let defaultGlContext: WebGL2RenderingContext | null = null;
 let currentTextureUnit = 0;
 
 // Keeps track of what texture unit is already in use
@@ -29,12 +28,11 @@ export function incrementCurrentTextureUnit() {
   currentTextureUnit++;
 }
 
-
 // From Fragment.ink
 export function getShaderCompileError(
   gl: WebGL2RenderingContext,
   vertexShaderSource: string,
-  fragmentShaderSource: string
+  fragmentShaderSource: string,
 ) {
   const vertexShader = gl.createShader(gl.VERTEX_SHADER) as WebGLShader;
   gl.shaderSource(vertexShader, vertexShaderSource);
@@ -55,7 +53,7 @@ export function getShaderCompileError(
 export function createProgram(
   gl: WebGL2RenderingContext,
   vertexShader: WebGLShader,
-  fragmentShader: WebGLShader
+  fragmentShader: WebGLShader,
 ): { program: WebGLProgram | null; error: string | null } {
   const program = gl.createProgram() as WebGLProgram;
   gl.attachShader(program, vertexShader);
@@ -75,7 +73,7 @@ export function createProgram(
 export function compileShader(
   gl: WebGL2RenderingContext,
   type: number,
-  source: string
+  source: string,
 ): { shader: WebGLShader | null; error: string | null } {
   const shader = gl.createShader(type) as WebGLShader;
   gl.shaderSource(shader, source);
@@ -96,9 +94,7 @@ export function prepareGlContext(options: {
   height: number;
 }): WebGL2RenderingContext {
   const canvas = (
-    options.canvasElemId
-      ? document.getElementById(options.canvasElemId)
-      : document.createElement("canvas")
+    options.canvasElemId ? document.getElementById(options.canvasElemId) : document.createElement("canvas")
   ) as HTMLCanvasElement;
   canvas.width = options.width;
   canvas.height = options.height;
