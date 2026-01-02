@@ -42,7 +42,10 @@ export class RasterContext {
       this.canvas.height = this.width;
     }
 
-    const gl = this.canvas.getContext("webgl2") as WebGL2RenderingContext;
+    const gl = this.canvas.getContext("webgl2", {
+      alpha: true,
+      premultipliedAlpha: false
+    }) as WebGL2RenderingContext;
 
     if (!gl) {
       throw new Error("This device is not compatible with WebGL2");

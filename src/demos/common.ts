@@ -20,7 +20,7 @@ export function sigmaFromRadius(
 
 export function buildGaussianKernelFromRadius(
   radius: number,
-  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.95
+  centralMass: 0.90 | 0.95 | 0.98 | 0.99 | 0.995 | 0.997 | 0.999 = 0.999
 ): Float32Array {
   const sigma = sigmaFromRadius(radius, centralMass);
   return buildGaussianKernel(radius, sigma);

@@ -101,6 +101,8 @@ ${terrariumToElevation}
 
 float easeOutSine(float value, float maxValue, float scale) {
   return sin(((min(value, maxValue) / maxValue) * PI) / 2.) * scale;
+
+
 }
 
 
@@ -127,7 +129,12 @@ void main() {
 
   float easedValue = easeOutSine(multiresWeightedDelta, 2000., 1.);
 
+  // fragColor = vec4(0./255., 0./255., 100./255., easedValue);
+
   fragColor = vec4(12./255., 34./255., 69./255., easedValue);
+
+
+  // fragColor = vec4(0., 0., 1., 0.7);
 }
 
 `.trim();
@@ -150,6 +157,8 @@ export async function cavityShading() {
     .replace("{y}", "363")
 
   const tex = await Texture.fromURL(rctx, tileUrl, {bilinear: false});
+
+  console.time("compute")
   const lowPassTextures: Record<number, Texture | null> = {
     3: null,
     7: null,
@@ -165,6 +174,14 @@ export async function cavityShading() {
     30: 1,
     60: 1,
   } as const;
+
+  // const gaussianScaleSpaceWeightsZ10 = {
+  //   3: 8,
+  //   7: 6,
+  //   15: 3,
+  //   30: 1,
+  //   60: 1,
+  // } as const;
 
   const kernelRadii = Object.keys(lowPassTextures).map(r => Number.parseInt(r));
 
@@ -187,7 +204,7 @@ export async function cavityShading() {
   });
 
   for (const radius of kernelRadii) {
-    console.log("radius... ", radius);
+    // console.log("radius... ", radius);
     
     const kernel = Array.from(buildGaussianKernelFromRadius(radius));
 
@@ -205,8 +222,6 @@ export async function cavityShading() {
 
     lowPassTextures[radius] = lowPassVerticalNode.getOutputTexture();
   }
-
-  console.log(lowPassTextures);
 
   const combineNode = new ProcessingNode(rctx, {renderToTexture: false});
   
@@ -230,6 +245,10 @@ export async function cavityShading() {
 
   combineNode.render();
 
+  
+  
+  const pixelData = combineNode.getPixelData()
+  console.timeEnd("compute")
 
-  console.log(combineNode.getPixelData());
+  console.log(pixelData);
 }

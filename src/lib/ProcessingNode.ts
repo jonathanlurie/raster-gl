@@ -105,6 +105,12 @@ export class ProcessingNode {
       width?: number;
       height?: number;
       uint32?: boolean;
+
+      /**
+       * The clear color is of form RGBA where each channel is a value in [0, 1].
+       * Default: [0, 0, 0, 1]
+       */
+      clearColor?: [number, number, number, number],
     } = {}
   ) {
     this.rasterContext = rasterContext;
