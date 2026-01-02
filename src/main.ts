@@ -1,6 +1,6 @@
 import { cavityShading } from './demos/cavity-shading';
 import { buildGaussianKernelFromRadius } from './demos/common';
-import { ProcessingNode, RasterContext, Texture, U_TYPE } from './lib';
+import { ProcessingNode, RasterContext, Texture, UNIFORM_TYPE } from './lib';
 import './style.css'
 
 
@@ -297,7 +297,7 @@ async function demo4() {
 
   
   n1.setUniformNumber("u_kernel", kernel);
-  n1.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+  n1.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
   n1.setUniformBoolean("u_isHorizontalPass", true);
   n1.setUniformTexture2D("u_tile", tex)
 
@@ -317,7 +317,7 @@ async function demo4() {
   });
 
   n2.setUniformNumber("u_kernel", kernel);
-  n2.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+  n2.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
   n2.setUniformBoolean("u_isHorizontalPass", false);
   n2.setUniformTexture2D("u_tile", n1)
   n2.render();
@@ -331,12 +331,12 @@ async function demo4() {
 
     console.time("renderLoop")
     n1.setUniformNumber("u_kernel", kernel);
-    n1.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    n1.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     n1.render();
 
     n2.setUniformTexture2D("u_tile", n1)
     n2.setUniformNumber("u_kernel", kernel);
-    n2.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    n2.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     n2.render();
 
     console.timeEnd("renderLoop")

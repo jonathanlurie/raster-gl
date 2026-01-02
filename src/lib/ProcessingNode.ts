@@ -4,7 +4,7 @@ import {
   compileShader,
   createProgram,
 } from "./gltools";
-import { isArrayOfTexture, isTexture, U_TYPE } from "./typetester";
+import { isArrayOfTexture, isTexture, UNIFORM_TYPE, type Vec2, type Vec3, type Vec4 } from "./typetester";
 import defaultVertexShader from "./shaders/default.vs.glsl?raw";
 import defaultFragmentShader from "./shaders/default.fs.glsl?raw";
 import { Texture } from "./Texture";
@@ -40,7 +40,7 @@ type UniformData = {
   /**
    * If the value is a number, its particular type could be forced to uint, int or float
    */
-  forcedType?: U_TYPE;
+  forcedType?: UNIFORM_TYPE;
 
   /**
    * Function to use on the gl context to update this uniform (eg. `gl.uniform1f`)
@@ -269,7 +269,7 @@ export class ProcessingNode {
         name,
         needsUpdate: true,
         location: null,
-        forcedType: U_TYPE.BOOL,
+        forcedType: UNIFORM_TYPE.BOOL,
         uniformFunction: null,
         uniformFunctionArguments: null,
       };
@@ -303,7 +303,7 @@ export class ProcessingNode {
   setUniformNumber(
     name: string,
     value: number | number[],
-    type: U_TYPE = U_TYPE.FLOAT
+    type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT
   ) {
     this.outputNeedUpdate = true;
     const gl = this.rasterContext.getGlContext();
@@ -324,14 +324,14 @@ export class ProcessingNode {
     }
 
     // If unique float
-    if (typeof value === "number" && type === U_TYPE.FLOAT) {
+    if (typeof value === "number" && type === UNIFORM_TYPE.FLOAT) {
       u.uniformFunction = gl.uniform1f;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
     }
 
     // If unique int
-    else if (typeof value === "number" && type === U_TYPE.INT) {
+    else if (typeof value === "number" && type === UNIFORM_TYPE.INT) {
       u.uniformFunction = gl.uniform1i;
       u.uniformFunctionArguments = [value];
       this.uniforms[name] = u;
@@ -342,7 +342,7 @@ export class ProcessingNode {
       Array.isArray(value) &&
       value.length > 0 &&
       typeof value[0] === "number" &&
-      type === U_TYPE.FLOAT
+      type === UNIFORM_TYPE.FLOAT
     ) {
       u.uniformFunction = gl.uniform1fv;
       u.uniformFunctionArguments = [value];
@@ -354,7 +354,7 @@ export class ProcessingNode {
       Array.isArray(value) &&
       value.length > 0 &&
       typeof value[0] === "number" &&
-      type === U_TYPE.INT
+      type === UNIFORM_TYPE.INT
     ) {
       u.uniformFunction = gl.uniform1iv;
       u.uniformFunctionArguments = [value];
@@ -420,17 +420,129 @@ export class ProcessingNode {
     }
   }
 
-  // setUniformVector2(name: string, value: vec2 | Array<vec2>) {
+  setUniformVector2(name: string, value: Vec2 /*| Array<Vec2>*/, type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
+    this.outputNeedUpdate = true;
+    const gl = this.rasterContext.getGlContext();
+    let u: UniformData;
 
-  // }
+    if (name in this.uniforms) {
+      u = this.uniforms[name];
+      u.needsUpdate = true;
+    } else {
+      u = {
+      name,
+      needsUpdate: true,
+      location: null,
+      forcedType: type,
+      uniformFunction: null,
+      uniformFunctionArguments: null,
+      };
+    }
 
-  // setUniformVector3(name: string, value: vec3 | Array<vec3>) {
+    // If Vec2 of floats
+    if (type === UNIFORM_TYPE.FLOAT) {
+      u.uniformFunction = gl.uniform2f;
+      u.uniformFunctionArguments = [value[0], value[1]];
+      this.uniforms[name] = u;
+    }
 
-  // }
+    // If Vec2 of ints
+    else if (type === UNIFORM_TYPE.INT) {
+      u.uniformFunction = gl.uniform2i;
+      u.uniformFunctionArguments = [value[0], value[1]];
+      this.uniforms[name] = u;
+    } else {
+      console.warn(`Uniform ${name} type mismatch`);
+    }
+  }
 
-  // setUniformVector4(name: string, value: vec4 | Array<vec4>) {
+  setUniformVector3(name: string, value: Vec3 /*| Array<vec3>*/, type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
+    this.outputNeedUpdate = true;
+    const gl = this.rasterContext.getGlContext();
+    let u: UniformData;
 
-  // }
+    if (name in this.uniforms) {
+      u = this.uniforms[name];
+      u.needsUpdate = true;
+    } else {
+      u = {
+      name,
+      needsUpdate: true,
+      location: null,
+      forcedType: type,
+      uniformFunction: null,
+      uniformFunctionArguments: null,
+      };
+    }
+
+    // If Vec2 of floats
+    if (type === UNIFORM_TYPE.FLOAT) {
+      u.uniformFunction = gl.uniform3f;
+      u.uniformFunctionArguments = [value[0], value[1], value[2]];
+      this.uniforms[name] = u;
+    }
+
+    // If Vec2 of ints
+    else if (type === UNIFORM_TYPE.INT) {
+      u.uniformFunction = gl.uniform3i;
+      u.uniformFunctionArguments = [value[0], value[1], value[2]];
+      this.uniforms[name] = u;
+    } else {
+      console.warn(`Uniform ${name} type mismatch`);
+    }
+  }
+
+
+  setUniformVector4(name: string, value: Vec4 /*| Array<vec4>*/, type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
+    this.outputNeedUpdate = true;
+    const gl = this.rasterContext.getGlContext();
+    let u: UniformData;
+
+    if (name in this.uniforms) {
+      u = this.uniforms[name];
+      u.needsUpdate = true;
+    } else {
+      u = {
+      name,
+      needsUpdate: true,
+      location: null,
+      forcedType: type,
+      uniformFunction: null,
+      uniformFunctionArguments: null,
+      };
+    }
+
+    // If Vec2 of floats
+    if (type === UNIFORM_TYPE.FLOAT) {
+      u.uniformFunction = gl.uniform4f;
+      u.uniformFunctionArguments = [value[0], value[1], value[2], value[3]];
+      this.uniforms[name] = u;
+    }
+
+    // If Vec2 of ints
+    else if (type === UNIFORM_TYPE.INT) {
+      u.uniformFunction = gl.uniform4i;
+      u.uniformFunctionArguments = [value[0], value[1], value[2], value[3]];
+      this.uniforms[name] = u;
+    } else {
+      console.warn(`Uniform ${name} type mismatch`);
+    }
+  }
+
+  /**
+   * Set a RGB color as uniform, where each color channel is in [0, 255]
+   */
+  setUniformRGB(name:string, value: Vec3) {
+    this.setUniformVector3(name, [value[0] / 255, value[1] / 255, value[2] / 255]);
+  }
+
+  /**
+   * Set a RGB color as uniform, where each color channel (RGB) is in [0, 255]
+   * and transparency is in [0, 1]
+   */
+  setUniformRGBA(name:string, value: Vec4) {
+    this.setUniformVector4(name, [value[0] / 255, value[1] / 255, value[2] / 255, value[3]]);
+  }
 
   private initUniforms() {
     const gl = this.rasterContext.getGlContext();

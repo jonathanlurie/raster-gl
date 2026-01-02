@@ -1,7 +1,11 @@
 import { Texture } from "./Texture";
 
+export type Vec2 = [number, number];
+export type Vec3 = [number, number, number];
+export type Vec4 = [number, number, number, number];
+
 // Diffent types of numerical uniforms
-export enum U_TYPE {
+export enum UNIFORM_TYPE {
   /**
    * Boolean
    */

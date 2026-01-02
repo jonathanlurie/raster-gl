@@ -1,4 +1,4 @@
-import { ProcessingNode, RasterContext, Texture, U_TYPE } from "../lib";
+import { ProcessingNode, RasterContext, Texture, UNIFORM_TYPE } from "../lib";
 import { buildGaussianKernelFromRadius } from "./common";
 
 
@@ -83,6 +83,8 @@ precision highp float;
 in vec2 uv;
 out vec4 fragColor;
 
+uniform vec3 u_tint;
+
 uniform float u_weightLowPass_3;
 uniform float u_weightLowPass_7;
 uniform float u_weightLowPass_15;
@@ -101,8 +103,6 @@ ${terrariumToElevation}
 
 float easeOutSine(float value, float maxValue, float scale) {
   return sin(((min(value, maxValue) / maxValue) * PI) / 2.) * scale;
-
-
 }
 
 
@@ -129,12 +129,7 @@ void main() {
 
   float easedValue = easeOutSine(multiresWeightedDelta, 2000., 1.);
 
-  // fragColor = vec4(0./255., 0./255., 100./255., easedValue);
-
-  fragColor = vec4(12./255., 34./255., 69./255., easedValue);
-
-
-  // fragColor = vec4(0., 0., 1., 0.7);
+  fragColor = vec4(u_tint.r, u_tint.g, u_tint.b, easedValue);
 }
 
 `.trim();
@@ -209,13 +204,13 @@ export async function cavityShading() {
     const kernel = Array.from(buildGaussianKernelFromRadius(radius));
 
     lowPassHorizontalNode.setUniformNumber("u_kernel", kernel);
-    lowPassHorizontalNode.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    lowPassHorizontalNode.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     lowPassHorizontalNode.setUniformBoolean("u_isHorizontalPass", true);
     lowPassHorizontalNode.setUniformTexture2D("u_tile", tex)
     lowPassHorizontalNode.render();
 
     lowPassVerticalNode.setUniformNumber("u_kernel", kernel);
-    lowPassVerticalNode.setUniformNumber("u_kernelSize", kernel.length, U_TYPE.INT);
+    lowPassVerticalNode.setUniformNumber("u_kernelSize", kernel.length, UNIFORM_TYPE.INT);
     lowPassVerticalNode.setUniformBoolean("u_isHorizontalPass", false);
     lowPassVerticalNode.setUniformTexture2D("u_tile", lowPassHorizontalNode)
     lowPassVerticalNode.render();
@@ -228,6 +223,8 @@ export async function cavityShading() {
   combineNode.setShaderSource({
     fragmentShaderSource: fragmentShaderCombine,
   });
+
+  combineNode.setUniformRGB("u_tint", [0, 0, 100]);
 
   combineNode.setUniformTexture2D("u_tile", tex);
 
