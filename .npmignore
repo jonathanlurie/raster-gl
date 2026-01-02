@@ -1,0 +1,6 @@
+src
+public
+dist
+index.html
+biome.json
+vite.config-lib.ts
