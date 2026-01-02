@@ -650,6 +650,7 @@ export class ProcessingNode {
     };
 
     return new Texture(
+      this.rasterContext,
       this.outputTexture,
       this.outputWidth,
       this.outputHeight,

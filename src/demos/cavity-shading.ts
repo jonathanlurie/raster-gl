@@ -170,14 +170,6 @@ export async function cavityShading() {
     60: 1,
   } as const;
 
-  // const gaussianScaleSpaceWeightsZ10 = {
-  //   3: 8,
-  //   7: 6,
-  //   15: 3,
-  //   30: 1,
-  //   60: 1,
-  // } as const;
-
   const kernelRadii = Object.keys(lowPassTextures).map(r => Number.parseInt(r));
 
   const lowPassHorizontalNode = new ProcessingNode(rctx, {

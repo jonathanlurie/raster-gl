@@ -53,6 +53,7 @@ export class Texture {
   private _textureUnit: number | null = null;
   private _texture: WebGLTexture | null = null;
   private readonly usageRecords: Array<UsageRecord> = [];
+  private readonly rasterContext: RasterContext;
 
   // TODO: fromFile (with a file picker)
 
@@ -119,6 +120,7 @@ export class Texture {
     }
 
     return new Texture(
+      rasterContext,
       texture,
       width,
       height,
@@ -215,6 +217,7 @@ export class Texture {
     gl.bindTexture(gl.TEXTURE_2D, null);
 
     return new Texture(
+      rasterContext,
       texture,
       width,
       height,
@@ -223,6 +226,7 @@ export class Texture {
   }
 
   constructor(
+    rasterContext: RasterContext,
     texture: WebGLTexture,
     width: number,
     height: number,
@@ -232,6 +236,8 @@ export class Texture {
     this.width = width;
     this.height = height;
     this.bitDepth = bitDepth;
+    this.rasterContext = rasterContext;
+    this.rasterContext.registerTexture(this);
   }
 
   get textureUnit(): number {

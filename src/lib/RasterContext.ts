@@ -1,3 +1,5 @@
+import type { Texture } from "./Texture";
+
 export type RasterContextOptions = {
   /**
    * Width of the canvas.
@@ -28,6 +30,7 @@ export class RasterContext {
   private readonly height: number;
   private readonly offscreen: boolean;
   private readonly gl: WebGL2RenderingContext;
+  private readonly registeredTextures: Texture[] = [];
 
   constructor(options: RasterContextOptions) {
     this.offscreen = options.offscreen ?? false;
@@ -71,6 +74,10 @@ export class RasterContext {
 
   isOffscreen(): boolean {
     return this.offscreen;
+  }
+
+  registerTexture(tex: Texture) {
+    this.registeredTextures.push(tex);
   }
 
 
