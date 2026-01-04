@@ -4,3 +4,4 @@ dist
 index.html
 biome.json
 vite.config-lib.ts
+raster-gl-*.tgz

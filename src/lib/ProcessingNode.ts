@@ -764,68 +764,72 @@ export class ProcessingNode {
    * If this node was instanciated with `uint32` being `false` (which is the default), then
    * the returned typed array is a Uint8Array
    */
-  getPixelData(asFloat = false): Uint8Array | Uint32Array | Float32Array {
+  getPixelData(options: { asFloat?: boolean, x?: number; y?: number; w?: number; h?: number } = {}): { data: Uint8Array | Uint32Array | Float32Array; width: number; height: number } {
     const gl = this.rasterContext.getGlContext();
-    const w = gl.canvas.width;
-    const h = gl.canvas.height;
+
+    const canvasW = gl.canvas.width;
+    const canvasH = gl.canvas.height;
+
+    const asFloat = options.asFloat ?? false;
+    const x = typeof options.x === "number" ? Math.max(0, Math.min(canvasW - 1, options.x)) : 0;
+    const y = typeof options.y === "number" ? Math.max(0, Math.min(canvasH - 1, options.y)) : 0;
+    const w = typeof options.w === "number" ? Math.max(1, Math.min(canvasW - x, options.w)) : canvasW - x;
+    const h = typeof options.h === "number" ? Math.max(1, Math.min(canvasH - y, options.h)) : canvasH - y;
 
     if (this.uint32 && asFloat) {
       const pixelData = new Uint32Array(w * h * 4);
-      gl.readPixels(0, 0, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
-      return new Float32Array(pixelData.buffer);
+      gl.readPixels(x, y, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
+      return { data: new Float32Array(pixelData.buffer), width: w, height: h };
     }
 
     if (this.uint32 && !asFloat) {
       const pixelData = new Uint32Array(w * h * 4);
-      gl.readPixels(0, 0, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
-      return pixelData;
+      gl.readPixels(x, y, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
+      return { data: pixelData, width: w, height: h };
     }
 
     const pixelData = new Uint8Array(w * h * 4);
-    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-    return pixelData;
+    gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+    return { data: pixelData, width: w, height: h };
   }
 
-  getImageData(): ImageData {
+  getImageData(options: { x?: number; y?: number; w?: number; h?: number } = {}): ImageData {
     if (this.uint32) {
       throw new Error("Uint32 image cannot be used to create an RGBA8 image.");
     }
 
-    const gl = this.rasterContext.getGlContext();
-    const w = gl.canvas.width;
-    const h = gl.canvas.height;
-    const imageData = new ImageData(w, h);
-    const pixelData = this.getPixelData();
-    imageData.data.set(pixelData);
+    const pixelData = this.getPixelData(options);
+    const imageData = new ImageData(pixelData.width, pixelData.height);
+    imageData.data.set(pixelData.data);
     return imageData;
   }
 
-  async getImageBitmap(): Promise<ImageBitmap> {
-    const imageData = this.getImageData();
+  async getImageBitmap(options: { x?: number; y?: number; w?: number; h?: number } = {}): Promise<ImageBitmap> {
+    const imageData = this.getImageData(options);
     return createImageBitmap(imageData);
   }
 
-  getNewOffscreenCanvas(): OffscreenCanvas {
-    const imageData = this.getImageData();
+  getNewOffscreenCanvas(options: { x?: number; y?: number; w?: number; h?: number } = {}): OffscreenCanvas {
+    const imageData = this.getImageData(options);
     const canvas = new OffscreenCanvas(imageData.width, imageData.height);
     const ctx = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
     ctx.putImageData(imageData, 0, 0);
     return canvas;
   }
 
-  async getPNGImageBlob(): Promise<Blob | null> {
-    const canvas = this.getNewOffscreenCanvas();
+  async getPNGImageBlob(options: { x?: number; y?: number; w?: number; h?: number } = {}): Promise<Blob | null> {
+    const canvas = this.getNewOffscreenCanvas(options);
     const blob = await canvas.convertToBlob();
     return blob;
   }
 
-  async getPNGImageBuffer(): Promise<ArrayBuffer | null> {
+  async getPNGImageBuffer(options: { x?: number; y?: number; w?: number; h?: number } = {}): Promise<ArrayBuffer | null> {
     if (this.uint32) {
       console.warn("Cannot convert uint32 data into PNG.");
       return null;
     }
 
-    const blob = await this.getPNGImageBlob();
+    const blob = await this.getPNGImageBlob(options);
 
     if (!blob) {
       console.warn("The PNG blob could not be created.");
@@ -836,13 +840,13 @@ export class ProcessingNode {
     return pngBuffer;
   }
 
-  async getPNGImageObjectURL(): Promise<string | null> {
+  async getPNGImageObjectURL(options: {x?: number; y?: number; w?: number; h?: number } = {}): Promise<string | null> {
     if (this.uint32) {
       console.warn("Cannot convert uint32 data into PNG.");
       return null;
     }
 
-    const blob = await this.getPNGImageBlob();
+    const blob = await this.getPNGImageBlob(options);
 
     if (!blob) {
       console.warn("The PNG blob could not be created.");

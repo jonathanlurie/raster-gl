@@ -103,13 +103,12 @@ float easeOutSine(float value, float maxValue, float scale) {
 
 
 void main() {
-  vec2 uvFlipped = vec2(uv.x, 1. - uv.y);
-  float eleTile = terrariumToElevation(texture(u_tile, uvFlipped));
-  float eleTileLowPass3 = terrariumToElevation(texture(u_tileLowPass_3, uvFlipped));
-  float eleTileLowPass7 = terrariumToElevation(texture(u_tileLowPass_7, uvFlipped));
-  float eleTileLowPass15 = terrariumToElevation(texture(u_tileLowPass_15, uvFlipped));
-  float eleTileLowPass30 = terrariumToElevation(texture(u_tileLowPass_30, uvFlipped));
-  float eleTileLowPass60 = terrariumToElevation(texture(u_tileLowPass_60, uvFlipped));
+  float eleTile = terrariumToElevation(texture(u_tile, uv));
+  float eleTileLowPass3 = terrariumToElevation(texture(u_tileLowPass_3, uv));
+  float eleTileLowPass7 = terrariumToElevation(texture(u_tileLowPass_7, uv));
+  float eleTileLowPass15 = terrariumToElevation(texture(u_tileLowPass_15, uv));
+  float eleTileLowPass30 = terrariumToElevation(texture(u_tileLowPass_30, uv));
+  float eleTileLowPass60 = terrariumToElevation(texture(u_tileLowPass_60, uv));
 
   float eleDeltaLowPass3 = max(0., eleTileLowPass3 - eleTile);
   float eleDeltaLowPass7 = max(0., eleTileLowPass7 - eleTile);
@@ -134,12 +133,12 @@ export async function cavityShading() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
-    offscreen: false,
+    offscreen: true,
   });
 
   console.log("rctx", rctx);
 
-  appDiv.append(rctx.getCanvas() as HTMLCanvasElement);
+  
 
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
@@ -229,6 +228,23 @@ export async function cavityShading() {
 
   const pixelData = combineNode.getPixelData();
   console.timeEnd("compute");
+
+  const imageUrl = await combineNode.getPNGImageObjectURL({
+    x: 100,
+    y: 100,
+    w: 512 - 200,
+    h: 512 - 200,
+  });
+
+  if (!imageUrl) {
+    console.warn("invalid img url");
+    return;
+  }
+
+  const imgElement = document.createElement("img");
+  imgElement.src = imageUrl;
+
+  appDiv.append(imgElement);
 
   console.log(pixelData);
 }
