@@ -764,7 +764,11 @@ export class ProcessingNode {
    * If this node was instanciated with `uint32` being `false` (which is the default), then
    * the returned typed array is a Uint8Array
    */
-  getPixelData(options: { asFloat?: boolean, x?: number; y?: number; w?: number; h?: number } = {}): { data: Uint8Array | Uint32Array | Float32Array; width: number; height: number } {
+  getPixelData(options: { asFloat?: boolean; x?: number; y?: number; w?: number; h?: number } = {}): {
+    data: Uint8Array | Uint32Array | Float32Array;
+    width: number;
+    height: number;
+  } {
     const gl = this.rasterContext.getGlContext();
 
     const canvasW = gl.canvas.width;
@@ -823,7 +827,9 @@ export class ProcessingNode {
     return blob;
   }
 
-  async getPNGImageBuffer(options: { x?: number; y?: number; w?: number; h?: number } = {}): Promise<ArrayBuffer | null> {
+  async getPNGImageBuffer(
+    options: { x?: number; y?: number; w?: number; h?: number } = {},
+  ): Promise<ArrayBuffer | null> {
     if (this.uint32) {
       console.warn("Cannot convert uint32 data into PNG.");
       return null;
@@ -840,7 +846,7 @@ export class ProcessingNode {
     return pngBuffer;
   }
 
-  async getPNGImageObjectURL(options: {x?: number; y?: number; w?: number; h?: number } = {}): Promise<string | null> {
+  async getPNGImageObjectURL(options: { x?: number; y?: number; w?: number; h?: number } = {}): Promise<string | null> {
     if (this.uint32) {
       console.warn("Cannot convert uint32 data into PNG.");
       return null;

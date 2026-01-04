@@ -138,8 +138,6 @@ export async function cavityShading() {
 
   console.log("rctx", rctx);
 
-  
-
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
@@ -230,10 +228,10 @@ export async function cavityShading() {
   console.timeEnd("compute");
 
   const imageUrl = await combineNode.getPNGImageObjectURL({
-    x: 100,
-    y: 100,
-    w: 512 - 200,
-    h: 512 - 200,
+    // x: 100,
+    // y: 100,
+    // w: 512 - 200,
+    // h: 512 - 200,
   });
 
   if (!imageUrl) {
