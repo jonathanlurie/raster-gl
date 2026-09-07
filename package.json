@@ -1,6 +1,6 @@
 {
   "name": "raster-gl",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "author": "Jonathan Lurie",
   "license": "MIT",
@@ -18,11 +18,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "tsc -p tests/tsconfig.json && node tests/run-webgl.mjs",
     "build:lib": "rm -rf ./dist-lib/* && vite build -c vite.config-lib.ts",
     "preview": "vite preview",
     "biome": "biome check --max-diagnostics=1000",
     "biome:fix": "biome check --max-diagnostics=1000 --write",
-    "tsc": "tsc --help"
+    "tsc": "tsc --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

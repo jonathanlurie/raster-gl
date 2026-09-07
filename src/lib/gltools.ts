@@ -4,8 +4,20 @@ let currentTextureUnit = 0;
 
 // Keeps track of what texture unit is already in use
 const textureUnitSlots: Array<boolean> = Array(16).fill(false);
+const contextTextureUnitSlots = new WeakMap<WebGL2RenderingContext, boolean[]>();
 
-export function getUnusedTextureUnit(): number {
+function getTextureUnitSlots(gl?: WebGL2RenderingContext): boolean[] {
+  if (!gl) return textureUnitSlots;
+  let slots = contextTextureUnitSlots.get(gl);
+  if (!slots) {
+    slots = Array(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) as number).fill(false);
+    contextTextureUnitSlots.set(gl, slots);
+  }
+  return slots;
+}
+
+export function getUnusedTextureUnit(gl?: WebGL2RenderingContext): number {
+  const textureUnitSlots = getTextureUnitSlots(gl);
   for (let i = 0; i < textureUnitSlots.length; i += 1) {
     if (!textureUnitSlots[i]) {
       textureUnitSlots[i] = true;
@@ -16,8 +28,8 @@ export function getUnusedTextureUnit(): number {
   throw new Error("All the texture units are already allocated.");
 }
 
-export function freeTextureUnit(i: number) {
-  textureUnitSlots[i] = false;
+export function freeTextureUnit(i: number, gl?: WebGL2RenderingContext) {
+  getTextureUnitSlots(gl)[i] = false;
 }
 
 export function getCurrentTextureUnit(): number {

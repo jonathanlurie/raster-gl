@@ -5,7 +5,7 @@ import type { RasterContext } from "./RasterContext";
 import defaultFragmentShader from "./shaders/default.fs.glsl?raw";
 import defaultVertexShader from "./shaders/default.vs.glsl?raw";
 import { Texture } from "./Texture";
-import { isArrayOfTexture, isTexture, UNIFORM_TYPE, type Vec2, type Vec3, type Vec4 } from "./typetester";
+import { UNIFORM_TYPE, type Vec2, type Vec3, type Vec4 } from "./typetester";
 
 // Many uniform functions exist and they have different signature depending on type
 // but this kind of covers all the usages
@@ -79,7 +79,8 @@ export class ProcessingNode {
   private outputTexture: Texture | null = null;
   private framebuffer: WebGLFramebuffer | null = null;
   private positionBuffer: WebGLBuffer | null = null;
-  // private isOffscreen: boolean;
+  private vertexArray: WebGLVertexArrayObject | null = null;
+  private readonly bilinear: boolean;
   private readonly uint32: boolean = false;
 
   constructor(
@@ -93,8 +94,12 @@ export class ProcessingNode {
        * Used only if renderToTexture is true.
        */
       reuseOutputTexture?: boolean;
+      /** Output width in pixels, independent of devicePixelRatio. */
       width?: number;
+      /** Output height in pixels, independent of devicePixelRatio. */
       height?: number;
+      /** Filter for output textures. Defaults to RasterContext's bilinear option. Integer outputs always use nearest. */
+      bilinear?: boolean;
       uint32?: boolean;
 
       /**
@@ -111,29 +116,15 @@ export class ProcessingNode {
     this.outputWidth = options.width ?? ctxSize.width;
     this.outputHeight = options.height ?? ctxSize.height;
     this.uint32 = options.uint32 ?? false;
-    const gl = this.rasterContext.getGlContext();
-
-    // Regardless of the render target, the canvas size must be adapted
-    if (this.renderToTexture) {
-      gl.canvas.width = this.outputWidth;
-      gl.canvas.height = this.outputHeight;
-    } else {
-      if (this.uint32) {
-        throw new Error("A Node can only output uint32 when rendering to texture.");
-      }
-
-      // Particularity for hi-DPI screens
-      gl.canvas.width = this.outputWidth * devicePixelRatio;
-      gl.canvas.height = this.outputHeight * devicePixelRatio;
-
-      if (!(gl.canvas instanceof OffscreenCanvas)) {
-        gl.canvas.style.width = `${this.outputWidth}px`;
-        gl.canvas.style.height = `${this.outputHeight}px`;
-      }
-    }
+    this.bilinear = options.bilinear ?? rasterContext.getDefaultBilinear();
+    this.setOutputSize(this.outputWidth, this.outputHeight);
+    this.setRenderToTexture(this.renderToTexture);
+    this.setClearColor(options.clearColor ?? [0, 0, 0, 1]);
+    this.rasterContext.registerProcessingNode(this);
   }
 
   setClearColor(color: RGBAUnitColor) {
+    this.outputNeedUpdate = true;
     this.clearColor[0] = color[0];
     this.clearColor[1] = color[1];
     this.clearColor[2] = color[2];
@@ -141,12 +132,16 @@ export class ProcessingNode {
   }
 
   setOutputSize(w: number, h: number) {
+    if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w <= 0 || h <= 0) {
+      throw new Error("Output dimensions must be positive integers.");
+    }
     this.outputWidth = w;
     this.outputHeight = h;
     this.outputNeedUpdate = true;
   }
 
   setRenderToTexture(b: boolean) {
+    if (!b && this.uint32) throw new Error("A Node can only output uint32 when rendering to texture.");
     this.renderToTexture = b;
     this.outputNeedUpdate = true;
   }
@@ -176,6 +171,14 @@ export class ProcessingNode {
     gl.deleteShader(this.compiledFragmentShader);
     this.compiledFragmentShader = null;
     this.fragmentShaderError = null;
+    gl.deleteVertexArray(this.vertexArray);
+    this.vertexArray = null;
+    this.positionAttributeLocation = null;
+    for (const uniform of Object.values(this.uniforms)) {
+      uniform.location = null;
+      uniform.needsUpdate = true;
+    }
+    this.outputNeedUpdate = true;
   }
 
   setShaderSource(options: { vertexShaderSource?: string; fragmentShaderSource?: string; throw?: boolean } = {}) {
@@ -230,6 +233,9 @@ export class ProcessingNode {
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
+      u.fragmentTexture?.removeUsageRecord(this, name);
+      u.fragmentTexture = undefined;
+      u.isTexture = false;
       u.needsUpdate = true;
     } else {
       u = {
@@ -270,6 +276,9 @@ export class ProcessingNode {
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
+      u.fragmentTexture?.removeUsageRecord(this, name);
+      u.fragmentTexture = undefined;
+      u.isTexture = false;
       u.needsUpdate = true;
     } else {
       u = {
@@ -316,54 +325,23 @@ export class ProcessingNode {
   /**
    * Add a texture as uniform
    */
-  setUniformTexture2D(name: string, value: Texture | ProcessingNode /* | Texture[]*/) {
+  setUniformTexture2D(name: string, value: Texture | ProcessingNode) {
+    const texture = value instanceof ProcessingNode ? value.getOutputTexture() : value;
+    if (!texture.isFromContext(this.rasterContext)) {
+      throw new Error("A texture must belong to the same RasterContext as its node.");
+    }
+    this.uniforms[name]?.fragmentTexture?.removeUsageRecord(this, name);
+    texture.addUsageRecord(this, name);
+    this.uniforms[name] = {
+      name,
+      needsUpdate: true,
+      location: this.uniforms[name]?.location ?? null,
+      uniformFunction: null,
+      uniformFunctionArguments: null,
+      isTexture: true,
+      fragmentTexture: texture,
+    };
     this.outputNeedUpdate = true;
-    let u: UniformData;
-    const gl = this.rasterContext.getGlContext();
-
-    if (name in this.uniforms) {
-      u = this.uniforms[name];
-      u.needsUpdate = true;
-      u.fragmentTexture?.removeUsageRecord(this, name);
-    } else {
-      u = {
-        name,
-        needsUpdate: true,
-        location: null,
-        uniformFunction: null,
-        uniformFunctionArguments: null,
-        isTexture: true,
-      };
-    }
-
-    // A ProcessingNode instance, from which we get the output texture
-    if (value instanceof ProcessingNode) {
-      const texture = value.getOutputTexture();
-      u.uniformFunction = gl.uniform1i;
-      u.fragmentTexture = texture;
-      u.fragmentTexture?.addUsageRecord(this, name);
-      u.uniformFunctionArguments = [u.fragmentTexture.textureUnit];
-      this.uniforms[name] = u;
-    }
-
-    // A texture
-    else if (isTexture(value)) {
-      u.uniformFunction = gl.uniform1i;
-      u.fragmentTexture = value;
-      u.fragmentTexture?.addUsageRecord(this, name);
-      u.uniformFunctionArguments = [u.fragmentTexture.textureUnit];
-      this.uniforms[name] = u;
-    }
-
-    // An array of texture
-    else if (isArrayOfTexture(value)) {
-      // u.uniformFunction = this.gl.uniform1iv;
-      // u.uniformFunctionArguments = [value];
-      // this.uniforms[name] = u;
-      console.warn("Fragment does not support arrays of textures yet.");
-    } else {
-      console.warn(`Uniform ${name} type mismatch`);
-    }
   }
 
   setUniformVector2(name: string, value: Vec2 /*| Array<Vec2>*/, type: UNIFORM_TYPE = UNIFORM_TYPE.FLOAT) {
@@ -373,6 +351,9 @@ export class ProcessingNode {
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
+      u.fragmentTexture?.removeUsageRecord(this, name);
+      u.fragmentTexture = undefined;
+      u.isTexture = false;
       u.needsUpdate = true;
     } else {
       u = {
@@ -409,6 +390,9 @@ export class ProcessingNode {
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
+      u.fragmentTexture?.removeUsageRecord(this, name);
+      u.fragmentTexture = undefined;
+      u.isTexture = false;
       u.needsUpdate = true;
     } else {
       u = {
@@ -445,6 +429,9 @@ export class ProcessingNode {
 
     if (name in this.uniforms) {
       u = this.uniforms[name];
+      u.fragmentTexture?.removeUsageRecord(this, name);
+      u.fragmentTexture = undefined;
+      u.isTexture = false;
       u.needsUpdate = true;
     } else {
       u = {
@@ -502,9 +489,9 @@ export class ProcessingNode {
     const nonTextureUniforms = uniformArray.filter((u) => !u.isTexture);
 
     for (const u of nonTextureUniforms) {
-      if (!u.needsUpdate) return;
-      if (!u.uniformFunction) return;
-      if (!u.uniformFunctionArguments) return;
+      if (!u.needsUpdate) continue;
+      if (!u.uniformFunction) continue;
+      if (!u.uniformFunctionArguments) continue;
 
       // If it's the first use of this uniform, we have to find a location for it
       u.location ??= gl.getUniformLocation(program, u.name);
@@ -515,56 +502,58 @@ export class ProcessingNode {
       u.needsUpdate = false;
     }
 
-    // The case of texture uniforms is handled separately.
-    // More info: See: https://webglfundamentals.org/webgl/lessons/webgl-2-textures.html
+    // Texture bindings are context state, so restore them on every draw.
+    const units = new Map<Texture, number>();
+    const maxUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) as number;
     for (const u of textureUniforms) {
-      if (!u.needsUpdate) return;
-      if (!u.uniformFunction) return;
-      if (!u.uniformFunctionArguments) return;
-      if (!u.fragmentTexture) return;
-
-      // If it's the first use of this uniform, we have to find a location for it
+      if (!u.fragmentTexture) continue;
       u.location ??= gl.getUniformLocation(program, u.name);
-
-      const textureUnit = u.fragmentTexture.textureUnit;
-
-      gl.activeTexture(gl.TEXTURE0 + textureUnit);
-      gl.bindTexture(gl.TEXTURE_2D, u.fragmentTexture.texture);
-
-      // Set the value
-      u.uniformFunction.apply(gl, [u.location, textureUnit]);
-
+      if (u.location === null) continue;
+      if (this.renderToTexture && u.fragmentTexture === this.outputTexture) {
+        throw new Error("A node cannot sample its own render target. Use two textures for feedback.");
+      }
+      let unit = units.get(u.fragmentTexture);
+      if (unit === undefined) {
+        unit = units.size;
+        if (unit >= maxUnits) throw new Error(`This draw exceeds the ${maxUnits} texture unit limit.`);
+        units.set(u.fragmentTexture, unit);
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindSampler(unit, null);
+        gl.bindTexture(gl.TEXTURE_2D, u.fragmentTexture.texture);
+      }
+      gl.uniform1i(u.location, unit);
       u.needsUpdate = false;
     }
   }
 
   private initPlane() {
     const gl = this.rasterContext.getGlContext();
-    if (this.positionAttributeLocation) return;
-
-    const program = this.shaderProgram;
-
-    if (!program) return;
-    // gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-    this.positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-
-    this.positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
-
-    // Define the vertices of the rectangle
-    const vertices = [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
-
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-
-    gl.enableVertexAttribArray(this.positionAttributeLocation);
-    gl.vertexAttribPointer(this.positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+    if (!this.shaderProgram) return;
+    if (!this.vertexArray) {
+      this.vertexArray = gl.createVertexArray();
+      if (!this.vertexArray) throw new Error("Could not allocate vertex array.");
+      gl.bindVertexArray(this.vertexArray);
+      if (!this.positionBuffer) {
+        this.positionBuffer = gl.createBuffer();
+        if (!this.positionBuffer) throw new Error("Could not allocate vertex buffer.");
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      } else {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
+      }
+      this.positionAttributeLocation = gl.getAttribLocation(this.shaderProgram, "a_position");
+      // Custom vertex shaders may use gl_VertexID instead.
+      if (this.positionAttributeLocation >= 0) {
+        gl.enableVertexAttribArray(this.positionAttributeLocation);
+        gl.vertexAttribPointer(this.positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+      }
+    }
+    gl.bindVertexArray(this.vertexArray);
   }
 
   /**
    * Get the output texture.
-   * Will be `null` if this node was set to render to a canvas.
-   * Will be a valid `FragmentTexture` if this node was set to render to texture.
+   * Canvas outputs are copied through CPU readback; texture outputs stay on the GPU.
    */
   getOutputTexture(): Texture {
     // Force a rendering if necessary
@@ -572,7 +561,7 @@ export class ProcessingNode {
       this.render();
     }
 
-    if (!this.outputTexture) {
+    if (!this.renderToTexture || !this.outputTexture) {
       console.warn("[GPU readback necessary] This node is not rendering to a texture.");
       return Texture.fromImageSource(this.rasterContext, this.getNewOffscreenCanvas());
     }
@@ -582,180 +571,87 @@ export class ProcessingNode {
 
   private initRenderToTextureLogic() {
     if (!this.renderToTexture) return;
-    if (this.outputTexture && this.reuseOutputTexture) return;
-
     const gl = this.rasterContext.getGlContext();
-    const outputTextureGl = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, outputTextureGl);
-
-    this.outputTexture = new Texture(
-      this.rasterContext,
-      outputTextureGl,
-      this.outputWidth,
-      this.outputHeight,
-      this.uint32 ? 32 : 8,
-    );
-
-    // Set the texture parameters
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    // Define the the texture
-    if (this.uint32) {
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA32UI,
+    if (!this.outputTexture || !this.reuseOutputTexture) {
+      const texture = gl.createTexture();
+      if (!texture) throw new Error("Could not allocate output texture.");
+      this.outputTexture = new Texture(
+        this.rasterContext,
+        texture,
         this.outputWidth,
         this.outputHeight,
-        0,
-        gl.RGBA_INTEGER,
-        gl.UNSIGNED_INT,
-        null,
+        this.uint32 ? 32 : 8,
       );
-    } else {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.outputWidth, this.outputHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      this.outputTexture.resize(this.outputWidth, this.outputHeight);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      const filter = this.uint32 || !this.bilinear ? gl.NEAREST : gl.LINEAR;
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    } else if (this.outputTexture.width !== this.outputWidth || this.outputTexture.height !== this.outputHeight) {
+      this.outputTexture.resize(this.outputWidth, this.outputHeight);
     }
-
-    // Create a framebuffer object (FBO) only if not already created
     this.framebuffer ??= gl.createFramebuffer();
+    if (!this.framebuffer) throw new Error("Could not allocate framebuffer.");
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-
-    // Attach the texture as a color attachment to the FBO
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTextureGl, 0);
-
-    // Check if the FBO is complete and properly set up
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-      console.error("Framebuffer is not complete.", gl.checkFramebufferStatus(gl.FRAMEBUFFER));
-    }
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.outputTexture.texture, 0);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`Framebuffer is incomplete: 0x${status.toString(16)}.`);
   }
 
   private updateOutput() {
-    if (!this.outputNeedUpdate) return;
-
     const gl = this.rasterContext.getGlContext();
-
-    if (this.renderToTexture && this.outputTexture && this.framebuffer) {
-      gl.bindTexture(gl.TEXTURE_2D, this.outputTexture.texture);
+    if (this.renderToTexture) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-      gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
     } else {
+      // Computational dimensions never depend on display density, including in workers.
+      if (gl.canvas.width !== this.outputWidth) gl.canvas.width = this.outputWidth;
+      if (gl.canvas.height !== this.outputHeight) gl.canvas.height = this.outputHeight;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.canvas.width = this.outputWidth * devicePixelRatio;
-      gl.canvas.height = this.outputHeight * devicePixelRatio;
-
-      if (!(gl.canvas instanceof OffscreenCanvas)) {
-        gl.canvas.style.width = `${this.outputWidth}px`;
-        gl.canvas.style.height = `${this.outputHeight}px`;
-      }
-
-      // Set the viewport size to match the canvas size
-      // gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.drawBuffers([gl.BACK]);
     }
-
-    this.outputNeedUpdate = false;
+    gl.viewport(0, 0, this.outputWidth, this.outputHeight);
   }
-  /*
-  testVertexBuffer() {
-    if (!this.shaderProgram) return;
 
-    const gl = this.rasterContext.getGlContext();
-
-    // const bufferAttributeLocation = gl.getAttribLocation(this.shaderProgram, 'a_color');
-
-    // const vertexBuffer = gl.createBuffer();
-    // gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-
-    // // Define the vertices of the rectangle
-    // const verticeData = [
-    //   1.0, 0.0, 0.0, 1.0,
-    //   0.0, 1.0, 0.0, 1.0,
-    //   0.0, 0.0, 1.0, 1.0,
-    //   1.0, 1.0, 1.0, 1.0,
-    // ];
-
-    // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticeData), gl.STATIC_DRAW);
-
-    // gl.enableVertexAttribArray(bufferAttributeLocation);
-    // gl.vertexAttribPointer(bufferAttributeLocation, 4, gl.FLOAT, false, 0, 0);
-
-    const colors = new Float32Array([
-      1.0,
-      0.0,
-      0.0,
-      1.0, // Red
-      0.0,
-      1.0,
-      0.0,
-      1.0, // Green
-      0.0,
-      0.0,
-      1.0,
-      1.0, // Blue
-      1.0,
-      1.0,
-      0.0,
-      1.0, // Yellow
-    ]);
-
-    const colorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
-
-    const colorAttributeLocation = gl.getAttribLocation(
-      this.shaderProgram,
-      "aColor"
-    );
-
-    gl.enableVertexAttribArray(colorAttributeLocation);
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.vertexAttribPointer(colorAttributeLocation, 4, gl.FLOAT, false, 0, 0);
-  }
-*/
-
-  /**
-   * Triggers the rendering of this node.
-   */
+  /** Triggers the rendering of this node. Each draw restores all raster state it uses. */
   render() {
     if (!this.shaderProgram) return;
-
     const gl = this.rasterContext.getGlContext();
-
-    // make sure the program of this node is attached to the gl context
-    // (if .setShaderSource() is called on a different node before this
-    // node has rendered, this would otherwise cause mix match)
-    const currentProgram = gl.getParameter(gl.CURRENT_PROGRAM);
-    if (currentProgram !== this.shaderProgram) {
-      gl.useProgram(this.shaderProgram);
-    }
-
-    this.initPlane();
     this.initRenderToTextureLogic();
     this.updateOutput();
+    gl.useProgram(this.shaderProgram);
+    this.initPlane();
     this.initUniforms();
-
-    // this.testVertexBuffer();
-
-    // For some reasons clearing does not work if output is uint32
-    if (!this.uint32) {
-      gl.clearColor(this.clearColor[0], this.clearColor[1], this.clearColor[2], this.clearColor[3]);
+    gl.disable(gl.DITHER);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.RASTERIZER_DISCARD);
+    gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+    gl.disable(gl.SAMPLE_COVERAGE);
+    gl.colorMask(true, true, true, true);
+    if (this.uint32) {
+      gl.clearBufferuiv(gl.COLOR, 0, new Uint32Array(this.clearColor));
+    } else {
+      gl.clearColor(...this.clearColor);
       gl.clear(gl.COLOR_BUFFER_BIT);
     }
-
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.outputNeedUpdate = false;
   }
 
   dispose() {
-    // TODO
+    this.free();
   }
 
   /**
-   * Get the pixel data from GPU as a JS typed array. This requires this node to just rendered.
-   * Note: if another Node has been redered after this one, then this method will nor work or
-   * will retrieve the data from the last rendered node.
+   * Read this node's output. Raw rows are bottom-to-top, as in WebGL.
+   * Dirty texture outputs and canvas outputs are rendered before readback.
+   * Canvas outputs must be redrawn because their shared buffer may have been overwritten or discarded.
    *
    * If this node was instantiated with the option `uint32` being `true`, then the JS typed
    * array will be a Uint32Array, unless the option `asFloat` is `true`. In this case, the
@@ -771,30 +667,51 @@ export class ProcessingNode {
   } {
     const gl = this.rasterContext.getGlContext();
 
-    const canvasW = gl.canvas.width;
-    const canvasH = gl.canvas.height;
+    for (const value of [options.x, options.y, options.w, options.h]) {
+      if (value !== undefined && !Number.isFinite(value)) throw new Error("Readback bounds must be finite.");
+    }
+    if (this.outputNeedUpdate || !this.renderToTexture) this.render();
+    if (!this.shaderProgram) throw new Error("Cannot read pixels without a valid shader program.");
+    const previousFramebuffer = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.renderToTexture ? this.framebuffer : null);
+    const previousReadBuffer = gl.getParameter(gl.READ_BUFFER) as number;
+    gl.readBuffer(this.renderToTexture ? gl.COLOR_ATTACHMENT0 : gl.BACK);
+    const canvasW = this.outputWidth;
+    const canvasH = this.outputHeight;
 
     const asFloat = options.asFloat ?? false;
-    const x = typeof options.x === "number" ? Math.max(0, Math.min(canvasW - 1, options.x)) : 0;
-    const y = typeof options.y === "number" ? Math.max(0, Math.min(canvasH - 1, options.y)) : 0;
-    const w = typeof options.w === "number" ? Math.max(1, Math.min(canvasW - x, options.w)) : canvasW - x;
-    const h = typeof options.h === "number" ? Math.max(1, Math.min(canvasH - y, options.h)) : canvasH - y;
+    const x = typeof options.x === "number" ? Math.max(0, Math.min(canvasW - 1, Math.floor(options.x))) : 0;
+    const y = typeof options.y === "number" ? Math.max(0, Math.min(canvasH - 1, Math.floor(options.y))) : 0;
+    const w = typeof options.w === "number" ? Math.max(1, Math.min(canvasW - x, Math.floor(options.w))) : canvasW - x;
+    const h = typeof options.h === "number" ? Math.max(1, Math.min(canvasH - y, Math.floor(options.h))) : canvasH - y;
 
-    if (this.uint32 && asFloat) {
-      const pixelData = new Uint32Array(w * h * 4);
-      gl.readPixels(x, y, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
-      return { data: new Float32Array(pixelData.buffer), width: w, height: h };
+    const pixelData = this.uint32 ? new Uint32Array(w * h * 4) : new Uint8Array(w * h * 4);
+    const packBuffer = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING) as WebGLBuffer | null;
+    const packState = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_PIXELS, gl.PACK_SKIP_ROWS];
+    const previousPackState = packState.map((parameter) => gl.getParameter(parameter) as number);
+    try {
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      packState.forEach((parameter, i) => {
+        gl.pixelStorei(parameter, i === 0 ? 1 : 0);
+      });
+      gl.readPixels(
+        x,
+        y,
+        w,
+        h,
+        this.uint32 ? gl.RGBA_INTEGER : gl.RGBA,
+        this.uint32 ? gl.UNSIGNED_INT : gl.UNSIGNED_BYTE,
+        pixelData,
+      );
+    } finally {
+      packState.forEach((parameter, i) => {
+        gl.pixelStorei(parameter, previousPackState[i]);
+      });
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, packBuffer);
+      gl.readBuffer(previousReadBuffer);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, previousFramebuffer);
     }
-
-    if (this.uint32 && !asFloat) {
-      const pixelData = new Uint32Array(w * h * 4);
-      gl.readPixels(x, y, w, h, gl.RGBA_INTEGER, gl.UNSIGNED_INT, pixelData);
-      return { data: pixelData, width: w, height: h };
-    }
-
-    const pixelData = new Uint8Array(w * h * 4);
-    gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-    return { data: pixelData, width: w, height: h };
+    return { data: this.uint32 && asFloat ? new Float32Array(pixelData.buffer) : pixelData, width: w, height: h };
   }
 
   getImageData(options: { x?: number; y?: number; w?: number; h?: number } = {}): ImageData {
@@ -804,7 +721,11 @@ export class ProcessingNode {
 
     const pixelData = this.getPixelData(options);
     const imageData = new ImageData(pixelData.width, pixelData.height);
-    imageData.data.set(pixelData.data);
+    const stride = pixelData.width * 4;
+    for (let y = 0; y < pixelData.height; y++) {
+      const source = (pixelData.height - y - 1) * stride;
+      imageData.data.set(pixelData.data.subarray(source, source + stride), y * stride);
+    }
     return imageData;
   }
 
@@ -884,7 +805,12 @@ export class ProcessingNode {
 
     if (this.outputTexture) {
       this.outputTexture.free();
+      this.outputTexture = null;
     }
+    for (const uniform of Object.values(this.uniforms)) {
+      uniform.fragmentTexture?.removeUsageRecord(this, uniform.name);
+    }
+    this.uniforms = {};
 
     this.resetProgram();
 

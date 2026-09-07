@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["./webgl.ts"],
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  }
+}

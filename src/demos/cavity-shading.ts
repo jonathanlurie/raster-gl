@@ -21,9 +21,10 @@ vec4 elevationToTerrarium(float elevation) {
 }
 `.trim();
 
-const fragmentShaderBlurPass = `
+export const fragmentShaderBlurPass = `
 #version 300 es
 precision highp float;
+precision highp sampler2D;
 
 const int MAX_KERNEL_SIZE = 121;
 
@@ -70,9 +71,10 @@ void main() {
 }
 `.trim();
 
-const fragmentShaderCombine = `
+export const fragmentShaderCombine = `
 #version 300 es
 precision highp float;
+precision highp sampler2D;
 
 #define PI 3.141592653589793
 
@@ -134,6 +136,7 @@ export async function cavityShading() {
     width: 512,
     height: 512,
     offscreen: true,
+    bilinear: false,
   });
 
   console.log("rctx", rctx);
@@ -141,7 +144,7 @@ export async function cavityShading() {
   const tileUrlPattern = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
   const tileUrl = tileUrlPattern.replace("{z}", "10").replace("{x}", "532").replace("{y}", "363");
 
-  const tex = await Texture.fromURL(rctx, tileUrl, { bilinear: false });
+  const tex = await Texture.fromURL(rctx, tileUrl);
 
   console.time("compute");
   const lowPassTextures: Record<number, Texture | null> = {
@@ -241,6 +244,11 @@ export async function cavityShading() {
 
   const imgElement = document.createElement("img");
   imgElement.src = imageUrl;
+  imgElement.width = 512;
+  imgElement.height = 512;
+  imgElement.style.imageRendering = "pixelated";
+  imgElement.onload = () => URL.revokeObjectURL(imageUrl);
+  rctx.free();
 
   appDiv.append(imgElement);
 

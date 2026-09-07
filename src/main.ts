@@ -5,7 +5,7 @@ import "./style.css";
 
 const appDiv = document.getElementById("app") as HTMLDivElement;
 
-function _demo1() {
+export function _demo1() {
   const rctx = new RasterContext({
     width: 1000,
     height: 800,
@@ -20,6 +20,7 @@ function _demo1() {
   #version 300 es
 
   precision highp float;
+  precision highp sampler2D;
 
   in vec2 uv;
   out vec4 fragColor;
@@ -52,7 +53,7 @@ function _demo1() {
   increaseBlue();
 }
 
-async function _demo2() {
+export async function _demo2() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
@@ -70,6 +71,7 @@ async function _demo2() {
   #version 300 es
 
   precision highp float;
+  precision highp sampler2D;
 
   in vec2 uv;
   out vec4 fragColor;
@@ -103,7 +105,7 @@ async function _demo2() {
   console.log(n.getPixelData());
 }
 
-async function _demo3() {
+export async function _demo3() {
   const rctx = new RasterContext({
     width: 512,
     height: 512,
@@ -123,6 +125,7 @@ async function _demo3() {
   #version 300 es
 
   precision highp float;
+  precision highp sampler2D;
 
   in vec2 uv;
   out vec4 fragColor;
@@ -163,6 +166,7 @@ async function _demo3() {
   #version 300 es
 
   precision highp float;
+  precision highp sampler2D;
 
   in vec2 uv;
   out vec4 fragColor;
@@ -187,7 +191,7 @@ async function _demo3() {
   console.log(n2.getPixelData());
 }
 
-async function _demo4() {
+export async function _demo4() {
   console.time("kernel");
   const kernel = Array.from(buildGaussianKernelFromRadius(1));
   console.timeEnd("kernel");
@@ -213,6 +217,7 @@ async function _demo4() {
   const fragmentShaderBlurPass = `
   #version 300 es
   precision highp float;
+  precision highp sampler2D;
 
   const int MAX_KERNEL_SIZE = 121;
 

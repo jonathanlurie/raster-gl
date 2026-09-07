@@ -22,6 +22,13 @@ export type RasterContextOptions = {
    * Default: false
    */
   offscreen?: boolean;
+
+  /**
+   * Default texture interpolation for uploads and node outputs in this context.
+   * Set false for nearest-neighbor sampling throughout the pipeline.
+   * Individual Texture/ProcessingNode options can override this default. Default: true.
+   */
+  bilinear?: boolean;
 };
 
 export class RasterContext {
@@ -29,12 +36,14 @@ export class RasterContext {
   private readonly width: number;
   private readonly height: number;
   private readonly offscreen: boolean;
+  private readonly defaultBilinear: boolean;
   private readonly gl: WebGL2RenderingContext;
   private readonly registeredTextures: Texture[] = [];
   private readonly registeredProcessingNodes: ProcessingNode[] = [];
 
   constructor(options: RasterContextOptions) {
     this.offscreen = options.offscreen ?? false;
+    this.defaultBilinear = options.bilinear ?? true;
     this.width = options.width;
     this.height = options.height;
 
@@ -43,7 +52,7 @@ export class RasterContext {
     } else {
       this.canvas = document.createElement("canvas");
       this.canvas.width = this.width;
-      this.canvas.height = this.width;
+      this.canvas.height = this.height;
     }
 
     const gl = this.canvas.getContext("webgl2", {
@@ -75,6 +84,10 @@ export class RasterContext {
 
   isOffscreen(): boolean {
     return this.offscreen;
+  }
+
+  getDefaultBilinear(): boolean {
+    return this.defaultBilinear;
   }
 
   registerTexture(tex: Texture) {
